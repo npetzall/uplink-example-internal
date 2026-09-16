@@ -33,6 +33,7 @@ jobs:
       - name: Sync with upstream
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPLINK_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch origin '+refs/heads/uplink/state:refs/heads/uplink/state'
           main_before=$(git rev-parse HEAD)
