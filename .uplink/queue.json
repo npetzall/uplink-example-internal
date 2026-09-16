@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "config": {
+    "upstreamRemote": "upstream",
+    "upstreamBranch": "main",
+    "contribRemote": "contrib",
+    "companyBranch": "main",
+    "stateBranch": "uplink/state",
+    "trailerKey": "Uplink-Patch-Id",
+    "cutoffMarker": "----- Uplink: internal below this line -----",
+    "exportAuthorName": "Uplink Contributor",
+    "exportAuthorEmail": "uplink@users.noreply.github.com"
+  },
+  "patches": []
+}
