@@ -11,5 +11,59 @@
     "exportAuthorName": "Uplink Contributor",
     "exportAuthorEmail": "uplink@users.noreply.github.com"
   },
-  "patches": []
+  "patches": [
+    {
+      "id": "upl_8ffe6039e5",
+      "title": "Example GitHub workflows",
+      "commitMessage": "Example GitHub workflows\n\nInstall Uplink Actions on company main. Not for upstream.\n----- Uplink: internal below this line -----\nTicket: PROJ-0000",
+      "intent": "internal-only",
+      "status": "queued",
+      "dependsOn": [],
+      "createdAt": "2026-09-16T16:36:36.839Z",
+      "updatedAt": "2026-09-16T16:36:36.841Z",
+      "patchIdStable": "bc116671d9b15cb610a048b1c6a56c3a0291ff17",
+      "source": {},
+      "prepare": {
+        "at": "2026-09-16T16:36:36.852Z",
+        "ok": true,
+        "commitMessage": "Example GitHub workflows\n\nInstall Uplink Actions on company main. Not for upstream.\n----- Uplink: internal below this line -----\nTicket: PROJ-0000",
+        "publicSubject": "Example GitHub workflows",
+        "publicBody": "Install Uplink Actions on company main. Not for upstream.",
+        "authorName": "Uplink Contributor",
+        "authorEmail": "uplink@users.noreply.github.com",
+        "originalAuthor": "Uplink Example",
+        "originalEmail": "uplink-example@users.noreply.github.com",
+        "cutoffFound": true,
+        "checks": [
+          {
+            "id": "message-scrubbed",
+            "status": "pass",
+            "detail": "Internal section removed. Public body is what upstream will see."
+          },
+          {
+            "id": "cutoff-used",
+            "status": "pass",
+            "detail": "Cutoff “----- Uplink: internal below this line -----” found."
+          },
+          {
+            "id": "author-rewrite",
+            "status": "pass",
+            "detail": "Export author Uplink Contributor <uplink@users.noreply.github.com> (was Uplink Example <uplink-example@users.noreply.github.com>). Company main still records the Uplink bot."
+          },
+          {
+            "id": "affiliation-leak",
+            "status": "skip",
+            "detail": "internal-only patches are not exported; keyword scan skipped."
+          }
+        ]
+      },
+      "events": [
+        {
+          "at": "2026-09-16T16:36:36.841Z",
+          "type": "created",
+          "detail": "Imported from f72ebc9c..60a1fb2b as internal-only"
+        }
+      ]
+    }
+  ]
 }

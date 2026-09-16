@@ -1,0 +1,774 @@
+From da6dc33a3ef90d6a95c8b487ea8d1db15b754279 Mon Sep 17 00:00:00 2001
+From: Uplink Bot <uplink@company.example>
+Date: Wed, 16 Sep 2026 18:36:36 +0200
+Subject: [PATCH] Example GitHub workflows
+
+Install Uplink Actions on company main. Not for upstream.
+----- Uplink: internal below this line -----
+Ticket: PROJ-0000
+
+Uplink-Patch-Id: upl_8ffe6039e5
+---
+ .github/actions/add-uplink-remotes/action.yml |  24 ++++
+ .github/actions/install-git-uplink/action.yml |  37 +++++
+ .github/pull_request_template.md              |  23 +++
+ .github/workflows/example-reset.yml           |   7 +-
+ .github/workflows/uplink-import.yml           |  63 +++++++++
+ .github/workflows/uplink-preflight.yml        |  61 ++++++++
+ .github/workflows/uplink-prepare.yml          |  67 +++++++++
+ .github/workflows/uplink-resolve.yml          | 131 ++++++++++++++++++
+ .github/workflows/uplink-submit.yml           |  96 +++++++++++++
+ .github/workflows/uplink-sync.yml             |  94 +++++++++++++
+ scripts/reset-example.sh                      |  29 +++-
+ 11 files changed, 622 insertions(+), 10 deletions(-)
+ create mode 100644 .github/actions/add-uplink-remotes/action.yml
+ create mode 100644 .github/actions/install-git-uplink/action.yml
+ create mode 100644 .github/pull_request_template.md
+ create mode 100644 .github/workflows/uplink-import.yml
+ create mode 100644 .github/workflows/uplink-preflight.yml
+ create mode 100644 .github/workflows/uplink-prepare.yml
+ create mode 100644 .github/workflows/uplink-resolve.yml
+ create mode 100644 .github/workflows/uplink-submit.yml
+ create mode 100644 .github/workflows/uplink-sync.yml
+
+diff --git a/.github/actions/add-uplink-remotes/action.yml b/.github/actions/add-uplink-remotes/action.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..47a8aa75b4e2df6251c7d1977a9d6d19a7cdb613
+--- /dev/null
++++ b/.github/actions/add-uplink-remotes/action.yml
+@@ -0,0 +1,24 @@
++name: Add Uplink remotes
++description: Point upstream and contrib remotes at the example GitHub repositories.
++inputs:
++  upstream:
++    description: GitHub repository (owner/name) for the public upstream
++    required: true
++  contrib:
++    description: GitHub repository (owner/name) for the contrib fork
++    required: true
++runs:
++  using: composite
++  steps:
++    - name: Add upstream and contrib remotes
++      shell: bash
++      run: |
++        if [ -z "${{ inputs.upstream }}" ] || [ -z "${{ inputs.contrib }}" ]; then
++          echo "Set repository variables UPLINK_UPSTREAM and UPLINK_CONTRIB (owner/name)." >&2
++          exit 1
++        fi
++        git remote remove upstream 2>/dev/null || true
++        git remote add upstream "https://github.com/${{ inputs.upstream }}.git"
++        git remote remove contrib 2>/dev/null || true
++        git remote add contrib "https://github.com/${{ inputs.contrib }}.git"
++        git remote -v
+diff --git a/.github/actions/install-git-uplink/action.yml b/.github/actions/install-git-uplink/action.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..2541635e6e37d0f8989df94854f188b0375cefaf
+--- /dev/null
++++ b/.github/actions/install-git-uplink/action.yml
+@@ -0,0 +1,37 @@
++name: Install git-uplink
++description: Build git-uplink from source and put it on PATH for this runner.
++inputs:
++  src:
++    description: GitHub repository (owner/name) that contains git-uplink
++    required: true
++  rev:
++    description: Git ref to build
++    required: true
++runs:
++  using: composite
++  steps:
++    - uses: actions/setup-node@v4
++      with:
++        node-version: "22"
++    - uses: dtolnay/rust-toolchain@master
++      with:
++        toolchain: 1.98.1
++    - uses: actions/checkout@v4
++      with:
++        repository: ${{ inputs.src }}
++        ref: ${{ inputs.rev }}
++        path: _git-uplink-src
++        persist-credentials: false
++    - uses: Swatinem/rust-cache@v2
++      with:
++        workspaces: _git-uplink-src
++        cache-on-failure: true
++    - name: Install git-uplink
++      shell: bash
++      run: |
++        cargo install --path _git-uplink-src --locked --force --root "$HOME/.local"
++        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
++        "$HOME/.local/bin/git-uplink" -h >/dev/null
++    - name: Remove source checkout
++      shell: bash
++      run: rm -rf _git-uplink-src
+diff --git a/.github/pull_request_template.md b/.github/pull_request_template.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f44fa6ba953cccd549b88e00e77ef5db3b60cde
+--- /dev/null
++++ b/.github/pull_request_template.md
+@@ -0,0 +1,23 @@
++<!--
++Write the public commit message the way an upstream maintainer should
++read it. Do not mention the company, internal issue trackers, or private
++hostnames above the cutoff.
++
++The pull request title is the commit subject and the queue entry title.
++The text above the cutoff is the public body. HTML comments are stripped
++when Uplink stores the message.
++-->
++
++<!-- Public body goes here. -->
++
++----- Uplink: internal below this line -----
++
++<!--
++Internal notes below stay on company main and are stripped before export
++to upstream. Do not delete the cutoff line.
++
++Examples:
++Ticket: PROJ-1234
++Uplink-Depends-On: upl_…
++Uplink-Export-Author: Jane Public <jane@users.noreply.github.com>
++-->
+diff --git a/.github/workflows/example-reset.yml b/.github/workflows/example-reset.yml
+index 3774cb7040f1eb1be4825f9278e6d99dd0936b02..53dcca933c22d7155eee0e10f5ee096d9f2d80f7 100644
+--- a/.github/workflows/example-reset.yml
++++ b/.github/workflows/example-reset.yml
+@@ -1,5 +1,5 @@
+-# Reset this public tokenkit repo: close PRs, drop leftover branches,
+-# force-push seed onto main. Run from branch seed if main is wrecked.
++# Restore company main, uplink/state, and uplink/upstream from seed refs.
++# Run from branch seed if main is wrecked.
+ name: Reset example
+ 
+ on:
+@@ -8,6 +8,7 @@ on:
+ permissions:
+   contents: write
+   pull-requests: write
++  issues: write
+ 
+ jobs:
+   reset:
+@@ -17,7 +18,7 @@ jobs:
+         with:
+           fetch-depth: 0
+           ref: seed
+-      - name: Restore main from seed
++      - name: Restore seed refs
+         env:
+           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+         run: bash scripts/reset-example.sh
+diff --git a/.github/workflows/uplink-import.yml b/.github/workflows/uplink-import.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..19c736292fbc3ce32e1778003d045501768e4404
+--- /dev/null
++++ b/.github/workflows/uplink-import.yml
+@@ -0,0 +1,63 @@
++# Example copy of templates/emu-workflows/uplink-import.yml.
++# Keep behavior in sync. This copy installs git-uplink on the runner.
++name: Uplink import
++
++on:
++  pull_request:
++    types: [labeled, closed]
++
++concurrency:
++  group: uplink-mutate
++  cancel-in-progress: false
++
++permissions:
++  contents: write
++  pull-requests: write
++
++jobs:
++  import:
++    if: |
++      (github.event.action == 'labeled' && github.event.label.name == 'uplink:import') ||
++      (github.event.action == 'closed' && github.event.pull_request.merged)
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++          ref: ${{ github.event.pull_request.base.ref }}
++      - uses: ./.github/actions/install-git-uplink
++        with:
++          src: ${{ vars.UPLINK_SRC }}
++          rev: ${{ vars.UPLINK_REV }}
++      - uses: ./.github/actions/add-uplink-remotes
++        with:
++          upstream: ${{ vars.UPLINK_UPSTREAM }}
++          contrib: ${{ vars.UPLINK_CONTRIB }}
++
++      - name: Fetch the reviewed change
++        run: |
++          git fetch --quiet origin ${{ github.event.pull_request.head.sha }}
++          git fetch --quiet origin ${{ github.event.pull_request.base.sha }}
++          git fetch origin '+refs/heads/uplink/state:refs/heads/uplink/state'
++
++      - name: Import as a queued patch
++        env:
++          TITLE: ${{ github.event.pull_request.title }}
++          BODY: ${{ github.event.pull_request.body }}
++          INTERNAL_ONLY: ${{ contains(github.event.pull_request.labels.*.name, 'uplink:internal-only') }}
++          PR_NUMBER: ${{ github.event.pull_request.number }}
++          PR_URL: ${{ github.event.pull_request.html_url }}
++          FROM_SHA: ${{ github.event.pull_request.base.sha }}
++          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
++        run: |
++          extra=""
++          if [ "$INTERNAL_ONLY" = "true" ]; then extra="--internal-only"; fi
++          {
++            printf '%s\n\n' "$TITLE"
++            printf '%s\n' "${BODY:-}"
++          } > /tmp/uplink-msg.txt
++          git uplink add --title "$TITLE" --message-file /tmp/uplink-msg.txt \
++            --from "$FROM_SHA" --head "$HEAD_SHA" \
++            --pr "$PR_NUMBER" --pr-url "$PR_URL" --push $extra
+diff --git a/.github/workflows/uplink-preflight.yml b/.github/workflows/uplink-preflight.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..fe9754a5d6270302a6b8796570c278a1752fab74
+--- /dev/null
++++ b/.github/workflows/uplink-preflight.yml
+@@ -0,0 +1,61 @@
++# Example copy of templates/emu-workflows/uplink-preflight.yml.
++# Keep behavior in sync. This copy installs git-uplink on the runner.
++name: Uplink export preflight
++
++on:
++  pull_request:
++    types: [opened, synchronize, reopened, edited]
++
++concurrency:
++  group: uplink-preflight-${{ github.event.pull_request.number }}
++  cancel-in-progress: true
++
++permissions:
++  contents: read
++  pull-requests: write
++
++jobs:
++  preflight:
++    if: github.event.pull_request.base.ref == 'main'
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++          ref: ${{ github.event.pull_request.base.ref }}
++      - uses: ./.github/actions/install-git-uplink
++        with:
++          src: ${{ vars.UPLINK_SRC }}
++          rev: ${{ vars.UPLINK_REV }}
++      - uses: ./.github/actions/add-uplink-remotes
++        with:
++          upstream: ${{ vars.UPLINK_UPSTREAM }}
++          contrib: ${{ vars.UPLINK_CONTRIB }}
++
++      - name: Fetch the candidate change
++        run: |
++          git fetch --quiet origin ${{ github.event.pull_request.head.sha }}
++          git fetch --quiet origin ${{ github.event.pull_request.base.sha }}
++          git fetch --quiet origin uplink/upstream:uplink/upstream || true
++          git fetch --quiet origin uplink/state:uplink/state || true
++
++      - name: Export preflight
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
++          TITLE: ${{ github.event.pull_request.title }}
++          BODY: ${{ github.event.pull_request.body }}
++          FROM_SHA: ${{ github.event.pull_request.base.sha }}
++          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
++          PR_NUMBER: ${{ github.event.pull_request.number }}
++        run: |
++          {
++            printf '%s\n\n' "$TITLE"
++            printf '%s\n' "${BODY:-}"
++          } > /tmp/uplink-msg.txt
++          git uplink preflight \
++            --title "$TITLE" \
++            --message-file /tmp/uplink-msg.txt \
++            --from "$FROM_SHA" \
++            --head "$HEAD_SHA" \
++            --pr "$PR_NUMBER"
+diff --git a/.github/workflows/uplink-prepare.yml b/.github/workflows/uplink-prepare.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..308f386e0bcc2e371c2f2dbf441bcf2bac8c853b
+--- /dev/null
++++ b/.github/workflows/uplink-prepare.yml
+@@ -0,0 +1,67 @@
++# Example copy of templates/emu-workflows/uplink-prepare.yml.
++# Keep behavior in sync. This copy installs git-uplink on the runner.
++name: Uplink prepare for upstream
++
++on:
++  pull_request:
++    types: [opened, synchronize, reopened, edited]
++
++concurrency:
++  group: uplink-prepare-${{ github.event.pull_request.number }}
++  cancel-in-progress: true
++
++permissions:
++  contents: read
++  pull-requests: write
++
++jobs:
++  prepare:
++    if: github.event.pull_request.base.ref == 'main'
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++          ref: ${{ github.event.pull_request.base.ref }}
++      - uses: ./.github/actions/install-git-uplink
++        with:
++          src: ${{ vars.UPLINK_SRC }}
++          rev: ${{ vars.UPLINK_REV }}
++      - uses: ./.github/actions/add-uplink-remotes
++        with:
++          upstream: ${{ vars.UPLINK_UPSTREAM }}
++          contrib: ${{ vars.UPLINK_CONTRIB }}
++
++      - name: Fetch the candidate change
++        run: |
++          git fetch --quiet origin ${{ github.event.pull_request.head.sha }}
++          git fetch --quiet origin ${{ github.event.pull_request.base.sha }}
++          git fetch --quiet origin uplink/state:uplink/state || true
++
++      - name: Prepare contribution
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          UPLINK_REDACT_KEYWORDS: ${{ vars.UPLINK_REDACT_KEYWORDS }}
++          UPLINK_INTERNAL_DOMAINS: ${{ vars.UPLINK_INTERNAL_DOMAINS }}
++          UPLINK_EXPORT_AUTHOR: ${{ vars.UPLINK_EXPORT_AUTHOR }}
++          TITLE: ${{ github.event.pull_request.title }}
++          BODY: ${{ github.event.pull_request.body }}
++          FROM_SHA: ${{ github.event.pull_request.base.sha }}
++          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
++          PR_NUMBER: ${{ github.event.pull_request.number }}
++        run: |
++          extra=""
++          if echo "${{ join(github.event.pull_request.labels.*.name, ',') }}" | grep -q 'uplink:internal-only'; then
++            extra="--internal-only"
++          fi
++          {
++            printf '%s\n\n' "$TITLE"
++            printf '%s\n' "${BODY:-}"
++          } > /tmp/uplink-msg.txt
++          git uplink prepare \
++            --title "$TITLE" \
++            --message-file /tmp/uplink-msg.txt \
++            --from "$FROM_SHA" \
++            --head "$HEAD_SHA" \
++            --pr "$PR_NUMBER" \
++            $extra
+diff --git a/.github/workflows/uplink-resolve.yml b/.github/workflows/uplink-resolve.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..e0156c0ad5700093a8cd20627e2c44ab1c541243
+--- /dev/null
++++ b/.github/workflows/uplink-resolve.yml
+@@ -0,0 +1,131 @@
++# Example copy of templates/emu-workflows/uplink-resolve.yml.
++# Keep behavior in sync. This copy installs git-uplink on the runner.
++name: Uplink resolve
++
++on:
++  push:
++    branches:
++      - "uplink/conflict/**"
++
++concurrency:
++  group: uplink-mutate
++  cancel-in-progress: false
++
++permissions:
++  contents: write
++  issues: write
++  pull-requests: write
++  actions: write
++
++jobs:
++  resolve:
++    if: github.actor != 'github-actions[bot]'
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++      - uses: ./.github/actions/install-git-uplink
++        with:
++          src: ${{ vars.UPLINK_SRC }}
++          rev: ${{ vars.UPLINK_REV }}
++      - uses: ./.github/actions/add-uplink-remotes
++        with:
++          upstream: ${{ vars.UPLINK_UPSTREAM }}
++          contrib: ${{ vars.UPLINK_CONTRIB }}
++
++      - name: Resolve patch and rebuild main
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          git fetch origin main
++          git branch -f main origin/main
++          git fetch origin '+refs/heads/uplink/upstream:refs/heads/uplink/upstream'
++          git fetch origin '+refs/heads/uplink/state:refs/heads/uplink/state'
++          id="${GITHUB_REF_NAME#uplink/conflict/}"
++          if [ -z "$id" ] || [ "$id" = "$GITHUB_REF_NAME" ]; then
++            echo "Could not parse patch id from $GITHUB_REF_NAME"
++            exit 1
++          fi
++
++          main_before=$(git rev-parse origin/main)
++
++          set +e
++          git uplink resolve "$id"
++          code=$?
++          set -e
++          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
++            exit "$code"
++          fi
++
++          head=$(git rev-parse --abbrev-ref HEAD)
++          if [ "$head" != "main" ]; then
++            echo "HEAD is ${head}, not main; refusing to push"
++            exit 1
++          fi
++
++          git push origin uplink/state
++          main_after=$(git rev-parse HEAD)
++          if [ "$main_after" != "$main_before" ]; then
++            git push origin main --force-with-lease
++          fi
++
++          queue_json=$(git show uplink/state:.uplink/queue.json 2>/dev/null || cat .uplink/queue.json)
++          status=$(printf '%s\n' "$queue_json" | jq -r --arg id "$id" '.patches[] | select(.id==$id) | .status')
++          if [ "$status" = "amended" ]; then
++            waiting=$(gh run list --workflow="Uplink submit" --status=waiting --json databaseId,displayTitle,name 2>/dev/null || echo '[]')
++            echo "$waiting" | jq -r --arg id "$id" '.[] | select((.displayTitle // "" | contains($id)) or (.name // "" | contains($id))) | .databaseId' | while read -r run_id; do
++              if [ -n "$run_id" ]; then
++                gh run cancel "$run_id" || true
++              fi
++            done
++            gh workflow run "Uplink submit" --ref main -f "patch_id=$id"
++          fi
++
++          if [ "$code" -eq 2 ]; then
++            conflict_id=$(jq -r '.patches[] | select(.status=="conflict") | .id' .uplink/queue.json | head -n 1)
++            conflict_branch=$(jq -r '.patches[] | select(.status=="conflict") | .conflict.branch' .uplink/queue.json | head -n 1)
++            conflict_onto=$(jq -r '.patches[] | select(.status=="conflict") | .conflict.onto // empty' .uplink/queue.json | head -n 1)
++            if [ -z "$conflict_id" ] || [ "$conflict_id" = "null" ]; then
++              echo "resolve exited 2 but no conflict patch was recorded"
++            else
++              if git show-ref --verify --quiet "refs/heads/${conflict_branch}"; then
++                git push origin "refs/heads/${conflict_branch}:refs/heads/${conflict_branch}" --force
++              fi
++
++              title="Uplink conflict: ${conflict_id}"
++              existing=$(gh issue list --state open --json number,title --jq ".[] | select(.title==\"${title}\") | .number" | head -n 1)
++              if [ -z "$existing" ]; then
++                gh label create uplink:conflict --description "Uplink sync conflict; checkout the conflict branch, do not open a PR" --color B60205 || true
++                compare=""
++                if [ -n "$conflict_onto" ] && [ "$conflict_onto" != "null" ]; then
++                  compare="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${conflict_onto}...${conflict_branch}"
++                fi
++                body=$(cat <<EOF
++          Company \`main\` is bot-owned. **Do not open or merge a pull request** for this conflict.
++
++          Rebuild after resolving \`${id}\` stopped on \`${conflict_id}\`. Checkout \`${conflict_branch}\`, remove the conflict markers, and push. Then run \`git uplink resolve ${conflict_id}\` (or let **Uplink resolve** run on that push).
++
++          Remaining patches wait until this id is resolved.
++          EOF
++          )
++                if [ -n "$compare" ]; then
++                  body="${body}
++
++          Compare the failed apply (not frozen main): ${compare}"
++                fi
++                gh issue create --title "$title" --label uplink:conflict --body "$body"
++              fi
++            fi
++          fi
++
++          issue=$(gh issue list --state open --json number,title --jq ".[] | select(.title==\"Uplink conflict: ${id}\") | .number" | head -n 1)
++          if [ -n "$issue" ]; then
++            gh issue close "$issue" --comment "Resolved ${id}; company main rebuilt. Do not open a conflict PR."
++          fi
++          pr=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number')
++          if [ -n "$pr" ]; then
++            gh pr close "$pr" --comment "Resolved ${id}; company main rebuilt. Conflicts are tracked as issues, not PRs. Do not merge a conflict PR."
++          fi
++          git push origin --delete "$GITHUB_REF_NAME"
++          exit "$code"
+diff --git a/.github/workflows/uplink-submit.yml b/.github/workflows/uplink-submit.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..26e2bc0c2fe97cfbdb4a5e575c8ec95a36a3e028
+--- /dev/null
++++ b/.github/workflows/uplink-submit.yml
+@@ -0,0 +1,96 @@
++# Example copy of templates/emu-workflows/uplink-submit.yml.
++# Keep behavior in sync. This copy installs git-uplink on the runner.
++#
++# Default auth is a PAT in the oss Environment secret UPLINK_GITHUB_TOKEN
++# (vars.UPLINK_SUBMIT_AUTH=pat). That works when the contrib fork is on a
++# different GitHub owner than upstream. Set UPLINK_SUBMIT_AUTH=app and
++# fill UPLINK_APP_* secrets to mint an installation token instead
++# (production-shaped; both repos must share the App installation owner).
++name: Uplink submit
++run-name: Uplink submit ${{ inputs.patch_id }}
++
++on:
++  workflow_dispatch:
++    inputs:
++      patch_id:
++        description: Patch id to export (upl_…)
++        required: true
++
++permissions:
++  contents: write
++  deployments: write
++  pull-requests: write
++
++jobs:
++  packet:
++    name: Write OSS packet
++    if: github.ref == 'refs/heads/main'
++    runs-on: ubuntu-latest
++    concurrency:
++      group: uplink-mutate
++      cancel-in-progress: false
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++      - uses: ./.github/actions/install-git-uplink
++        with:
++          src: ${{ vars.UPLINK_SRC }}
++          rev: ${{ vars.UPLINK_REV }}
++      - uses: ./.github/actions/add-uplink-remotes
++        with:
++          upstream: ${{ vars.UPLINK_UPSTREAM }}
++          contrib: ${{ vars.UPLINK_CONTRIB }}
++      - name: Write approver packet
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          git fetch origin '+refs/heads/uplink/state:refs/heads/uplink/state'
++          git uplink report ${{ inputs.patch_id }}
++          git push origin uplink/state
++
++  submit:
++    name: Approve oss environment and submit
++    needs: packet
++    if: github.ref == 'refs/heads/main'
++    runs-on: ubuntu-latest
++    environment:
++      name: oss
++      url: ${{ github.server_url }}/${{ github.repository }}/blob/uplink/state/.uplink/reports/${{ inputs.patch_id }}/prepare.md
++    concurrency:
++      group: uplink-mutate
++      cancel-in-progress: false
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++          ref: main
++      - uses: ./.github/actions/install-git-uplink
++        with:
++          src: ${{ vars.UPLINK_SRC }}
++          rev: ${{ vars.UPLINK_REV }}
++      - uses: ./.github/actions/add-uplink-remotes
++        with:
++          upstream: ${{ vars.UPLINK_UPSTREAM }}
++          contrib: ${{ vars.UPLINK_CONTRIB }}
++      - name: Mint GitHub App token for public github.com
++        id: app
++        if: ${{ vars.UPLINK_SUBMIT_AUTH == 'app' }}
++        uses: actions/create-github-app-token@v2
++        with:
++          app-id: ${{ secrets.UPLINK_APP_ID }}
++          private-key: ${{ secrets.UPLINK_APP_PRIVATE_KEY }}
++          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
++          repositories: ${{ secrets.UPLINK_CONTRIB_REPO }}
++      - name: Record approval, approve, and submit
++        env:
++          UPLINK_GITHUB_TOKEN: ${{ vars.UPLINK_SUBMIT_AUTH == 'app' && steps.app.outputs.token || secrets.UPLINK_GITHUB_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
++          UPLINK_OSS_ENVIRONMENT: oss
++        run: |
++          git fetch origin '+refs/heads/uplink/state:refs/heads/uplink/state'
++          git uplink approve ${{ inputs.patch_id }}
++          git uplink submit ${{ inputs.patch_id }}
++          git push origin uplink/state
++          git push origin "uplink/${{ inputs.patch_id }}" --force
+diff --git a/.github/workflows/uplink-sync.yml b/.github/workflows/uplink-sync.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..413f3fff2761d0a660eebd7d303a2223a1a9a21b
+--- /dev/null
++++ b/.github/workflows/uplink-sync.yml
+@@ -0,0 +1,94 @@
++# Example copy of templates/emu-workflows/uplink-sync.yml.
++# Keep behavior in sync. This copy installs git-uplink and is
++# workflow_dispatch only (no hourly cron) so a walkthrough is not raced.
++name: Uplink sync
++
++on:
++  workflow_dispatch:
++
++concurrency:
++  group: uplink-mutate
++  cancel-in-progress: false
++
++permissions:
++  contents: write
++  issues: write
++
++jobs:
++  sync:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++      - uses: ./.github/actions/install-git-uplink
++        with:
++          src: ${{ vars.UPLINK_SRC }}
++          rev: ${{ vars.UPLINK_REV }}
++      - uses: ./.github/actions/add-uplink-remotes
++        with:
++          upstream: ${{ vars.UPLINK_UPSTREAM }}
++          contrib: ${{ vars.UPLINK_CONTRIB }}
++
++      - name: Sync with upstream
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          git fetch origin '+refs/heads/uplink/state:refs/heads/uplink/state'
++          main_before=$(git rev-parse HEAD)
++
++          set +e
++          git uplink sync
++          code=$?
++          set -e
++          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
++            exit "$code"
++          fi
++
++          git push origin uplink/state
++          git push origin uplink/upstream --force || true
++
++          main_after=$(git rev-parse HEAD)
++          if [ "$main_after" != "$main_before" ]; then
++            git push origin HEAD:main --force-with-lease
++          fi
++
++          if [ "$code" -ne 2 ]; then
++            exit 0
++          fi
++
++          conflict_id=$(jq -r '.patches[] | select(.status=="conflict") | .id' .uplink/queue.json | head -n 1)
++          conflict_branch=$(jq -r '.patches[] | select(.status=="conflict") | .conflict.branch' .uplink/queue.json | head -n 1)
++          conflict_onto=$(jq -r '.patches[] | select(.status=="conflict") | .conflict.onto // empty' .uplink/queue.json | head -n 1)
++          if [ -z "$conflict_id" ] || [ "$conflict_id" = "null" ]; then
++            echo "sync exited 2 but no conflict patch was recorded"
++            exit 2
++          fi
++          if git show-ref --verify --quiet "refs/heads/${conflict_branch}"; then
++            git push origin "refs/heads/${conflict_branch}:refs/heads/${conflict_branch}" --force
++          fi
++
++          title="Uplink conflict: ${conflict_id}"
++          existing=$(gh issue list --state open --json number,title --jq ".[] | select(.title==\"${title}\") | .number" | head -n 1)
++          if [ -z "$existing" ]; then
++            gh label create uplink:conflict --description "Uplink sync conflict; checkout the conflict branch, do not open a PR" --color B60205 || true
++            compare=""
++            if [ -n "$conflict_onto" ] && [ "$conflict_onto" != "null" ]; then
++              compare="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${conflict_onto}...${conflict_branch}"
++            fi
++            body=$(cat <<EOF
++          Company \`main\` is bot-owned. **Do not open or merge a pull request** for this conflict.
++
++          Sync stopped on \`${conflict_id}\`. Checkout \`${conflict_branch}\`, remove the conflict markers, and push. Then run \`git uplink resolve ${conflict_id}\` (or let **Uplink resolve** run on that push).
++
++          Remaining patches wait until this id is resolved.
++          EOF
++          )
++            if [ -n "$compare" ]; then
++              body="${body}
++
++          Compare the failed apply (not frozen main): ${compare}"
++            fi
++            gh issue create --title "$title" --label uplink:conflict --body "$body"
++          fi
++          exit 2
+diff --git a/scripts/reset-example.sh b/scripts/reset-example.sh
+index 47d18cda02b139432cdd59f1a2c215b223b6efdb..0e09eb9b127e47aa2ce09146d55a5f63d521e638 100755
+--- a/scripts/reset-example.sh
++++ b/scripts/reset-example.sh
+@@ -1,7 +1,6 @@
+ #!/usr/bin/env bash
+-# Reset this repository's main from the seed branch.
+-# Run from GitHub Actions (workflow_dispatch) with GH_TOKEN.
+-# Keeps: main, seed. Closes open PRs. Force-push is expected.
++# Reset the company product repo from seed / seed-state / seed-upstream.
++# Run from GitHub Actions with GH_TOKEN. Force-push is expected.
+ 
+ set -euo pipefail
+ 
+@@ -23,6 +22,19 @@ close_open_prs() {
+   done <<<"$numbers"
+ }
+ 
++close_conflict_issues() {
++  local numbers
++  numbers=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label uplink:conflict --json number --jq '.[].number' 2>/dev/null || true)
++  if [[ -z "$numbers" ]]; then
++    return
++  fi
++  while IFS= read -r n; do
++    [[ -z "$n" ]] && continue
++    echo "Closing issue #$n"
++    gh issue close "$n" --repo "$GITHUB_REPOSITORY" --comment "$comment" || true
++  done <<<"$numbers"
++}
++
+ delete_extra_heads() {
+   local refs
+   refs=$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads" --jq '.[].ref' 2>/dev/null || true)
+@@ -30,7 +42,7 @@ delete_extra_heads() {
+     [[ -z "$ref" ]] && continue
+     local name=${ref#refs/heads/}
+     case "$name" in
+-      main|seed) continue ;;
++      main|seed|seed-state|seed-upstream|uplink/state|uplink/upstream) continue ;;
+       *)
+         echo "Deleting ${name}"
+         gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/${ref}" >/dev/null || true
+@@ -39,10 +51,13 @@ delete_extra_heads() {
+   done <<<"$refs"
+ }
+ 
+-echo "Reset $GITHUB_REPOSITORY: seed -> main"
++echo "Reset $GITHUB_REPOSITORY from seed refs"
+ close_open_prs
++close_conflict_issues
+ delete_extra_heads
+ 
+-git fetch origin seed
++git fetch origin seed seed-state seed-upstream
+ git push --force origin "refs/remotes/origin/seed:refs/heads/main"
+-echo "main now matches seed"
++git push --force origin "refs/remotes/origin/seed-state:refs/heads/uplink/state"
++git push --force origin "refs/remotes/origin/seed-upstream:refs/heads/uplink/upstream"
++echo "main, uplink/state, and uplink/upstream match seed refs"
+-- 
+2.55.0
