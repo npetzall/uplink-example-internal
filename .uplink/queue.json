@@ -11,16 +11,22 @@
     "exportAuthorName": "Uplink Contributor",
     "exportAuthorEmail": "uplink@users.noreply.github.com"
   },
+  "lastSync": {
+    "at": "2026-09-16T22:52:27.999Z",
+    "upstreamSha": "da07cccee18f5adcd6f94b2c834a51be463b17f3",
+    "result": "conflict",
+    "message": "Patch upl_8ffe6039e5 (\"Example GitHub workflows\") does not apply onto the current upstream prefix."
+  },
   "patches": [
     {
       "id": "upl_8ffe6039e5",
       "title": "Example GitHub workflows",
       "commitMessage": "Example GitHub workflows\n\nInstall Uplink Actions on company main. Not for upstream.\n----- Uplink: internal below this line -----\nTicket: PROJ-0000",
       "intent": "internal-only",
-      "status": "queued",
+      "status": "conflict",
       "dependsOn": [],
       "createdAt": "2026-09-16T16:36:36.839Z",
-      "updatedAt": "2026-09-16T16:36:36.841Z",
+      "updatedAt": "2026-09-16T22:52:27.999Z",
       "patchIdStable": "bc116671d9b15cb610a048b1c6a56c3a0291ff17",
       "source": {},
       "prepare": {
@@ -57,11 +63,22 @@
           }
         ]
       },
+      "conflict": {
+        "branch": "uplink/conflict/upl_8ffe6039e5",
+        "files": [],
+        "message": "Patch upl_8ffe6039e5 (\"Example GitHub workflows\") does not apply onto the current upstream prefix.",
+        "onto": "da07cccee18f5adcd6f94b2c834a51be463b17f3"
+      },
       "events": [
         {
           "at": "2026-09-16T16:36:36.841Z",
           "type": "created",
           "detail": "Imported from f72ebc9c..60a1fb2b as internal-only"
+        },
+        {
+          "at": "2026-09-16T22:52:27.999Z",
+          "type": "conflict",
+          "detail": "untracked conflict"
         }
       ]
     },
