@@ -120,6 +120,62 @@
           "detail": "Internally approved via PR #3; imported as upstream"
         }
       ]
+    },
+    {
+      "id": "upl_51db40f32a",
+      "title": "fix: sync workflow",
+      "commitMessage": "fix: sync workflow\n\n\r\n\r\n\r\nInternal fix of sync workflows\r\n\r\n----- Uplink: internal below this line -----",
+      "intent": "internal-only",
+      "status": "queued",
+      "dependsOn": [],
+      "createdAt": "2026-09-16T22:50:54.045Z",
+      "updatedAt": "2026-09-16T22:50:54.045Z",
+      "patchIdStable": "eb871cc3bf6706bdf084267141c99962b0de8452",
+      "source": {
+        "internalPrNumber": 4,
+        "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/4"
+      },
+      "prepare": {
+        "at": "2026-09-16T22:50:54.050Z",
+        "ok": true,
+        "commitMessage": "fix: sync workflow\n\n\r\n\r\n\r\nInternal fix of sync workflows\r\n\r\n----- Uplink: internal below this line -----",
+        "publicSubject": "fix: sync workflow",
+        "publicBody": "Internal fix of sync workflows",
+        "authorName": "Uplink Contributor",
+        "authorEmail": "uplink@users.noreply.github.com",
+        "originalAuthor": "Nils Petzall",
+        "originalEmail": "nils.petzall@gmail.com",
+        "cutoffFound": true,
+        "checks": [
+          {
+            "id": "message-scrubbed",
+            "status": "pass",
+            "detail": "No cutoff in the message. The whole message is treated as public."
+          },
+          {
+            "id": "cutoff-used",
+            "status": "skip",
+            "detail": "Optional. Add “----- Uplink: internal below this line -----” under the public body for issue ids and other internal notes."
+          },
+          {
+            "id": "author-rewrite",
+            "status": "pass",
+            "detail": "Export author Uplink Contributor <uplink@users.noreply.github.com> (was Nils Petzall <nils.petzall@gmail.com>). Company main still records the Uplink bot."
+          },
+          {
+            "id": "affiliation-leak",
+            "status": "skip",
+            "detail": "internal-only patches are not exported; keyword scan skipped."
+          }
+        ]
+      },
+      "events": [
+        {
+          "at": "2026-09-16T22:50:54.045Z",
+          "type": "created",
+          "detail": "Internally approved via PR #4; imported as internal-only"
+        }
+      ]
     }
   ]
 }
