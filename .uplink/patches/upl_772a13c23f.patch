@@ -1,0 +1,32 @@
+From faa0e008a3fabe97980f3e54677a9aa5b14c24ee Mon Sep 17 00:00:00 2001
+From: Uplink Bot <uplink@company.example>
+Date: Wed, 16 Sep 2026 17:54:36 +0000
+Subject: [PATCH] Use SHA-256 for tokens
+
+Replace SHA-1 in the default hasher with SHA-256.
+
+----- Uplink: internal below this line -----
+
+Ticket: PROJ-1234
+Uplink-Export-Author: Asha <asha@users.noreply.github.com>
+
+Uplink-Patch-Id: upl_772a13c23f
+---
+ src/tokens.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/tokens.js b/src/tokens.js
+index 96232a19e7ba3bde3b3c68d8741e148a0ad0041e..0c7da2d506f5b1b38094895aeabfe9743b77877f 100644
+--- a/src/tokens.js
++++ b/src/tokens.js
+@@ -9,7 +9,7 @@ function sha256(value) {
+ }
+ 
+ export function hash(value) {
+-  return sha1(value);
++  return sha256(value);
+ }
+ 
+ export function ttl() {
+-- 
+2.55.0

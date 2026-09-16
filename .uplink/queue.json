@@ -64,6 +64,62 @@
           "detail": "Imported from f72ebc9c..60a1fb2b as internal-only"
         }
       ]
+    },
+    {
+      "id": "upl_772a13c23f",
+      "title": "Use SHA-256 for tokens",
+      "commitMessage": "Use SHA-256 for tokens\n\nReplace SHA-1 in the default hasher with SHA-256.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-1234\r\nUplink-Export-Author: Asha <asha@users.noreply.github.com>",
+      "intent": "upstream",
+      "status": "queued",
+      "dependsOn": [],
+      "createdAt": "2026-09-16T17:54:36.945Z",
+      "updatedAt": "2026-09-16T17:54:36.946Z",
+      "patchIdStable": "e8fbb10102ef0e41b7bfa7c2b6833938c07d10e8",
+      "source": {
+        "internalPrNumber": 3,
+        "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/3"
+      },
+      "prepare": {
+        "at": "2026-09-16T17:54:36.951Z",
+        "ok": true,
+        "commitMessage": "Use SHA-256 for tokens\n\nReplace SHA-1 in the default hasher with SHA-256.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-1234\r\nUplink-Export-Author: Asha <asha@users.noreply.github.com>",
+        "publicSubject": "Use SHA-256 for tokens",
+        "publicBody": "Replace SHA-1 in the default hasher with SHA-256.",
+        "authorName": "Asha",
+        "authorEmail": "asha@users.noreply.github.com",
+        "originalAuthor": "Nils Petzall",
+        "originalEmail": "nils.petzall@gmail.com",
+        "cutoffFound": true,
+        "checks": [
+          {
+            "id": "message-scrubbed",
+            "status": "pass",
+            "detail": "Internal section removed. Public body is what upstream will see."
+          },
+          {
+            "id": "cutoff-used",
+            "status": "pass",
+            "detail": "Cutoff “----- Uplink: internal below this line -----” found."
+          },
+          {
+            "id": "author-rewrite",
+            "status": "pass",
+            "detail": "Export author Asha <asha@users.noreply.github.com> (was Nils Petzall <nils.petzall@gmail.com>). Company main still records the Uplink bot."
+          },
+          {
+            "id": "affiliation-leak",
+            "status": "warn",
+            "detail": "No redactKeywords / internalEmailDomains configured. Set them (or UPLINK_REDACT_KEYWORDS) so tests cannot mention the company."
+          }
+        ]
+      },
+      "events": [
+        {
+          "at": "2026-09-16T17:54:36.946Z",
+          "type": "created",
+          "detail": "Internally approved via PR #3; imported as upstream"
+        }
+      ]
     }
   ]
 }
