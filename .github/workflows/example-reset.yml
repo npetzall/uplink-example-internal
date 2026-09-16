@@ -1,5 +1,5 @@
-# Reset this public tokenkit repo: close PRs, drop leftover branches,
-# force-push seed onto main. Run from branch seed if main is wrecked.
+# Restore company main, uplink/state, and uplink/upstream from seed refs.
+# Run from branch seed if main is wrecked.
 name: Reset example
 
 on:
@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   reset:
@@ -17,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: seed
-      - name: Restore main from seed
+      - name: Restore seed refs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/reset-example.sh
