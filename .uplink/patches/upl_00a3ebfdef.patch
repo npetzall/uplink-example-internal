@@ -1,4 +1,4 @@
-From d954633fb7221e0e4a2fcab4e9f7697b51f8eb26 Mon Sep 17 00:00:00 2001
+From 23220f0476f33921fd5e325c476158740af41682 Mon Sep 17 00:00:00 2001
 From: Uplink Bot <uplink@company.example>
 Date: Mon, 21 Sep 2026 22:00:28 +0200
 Subject: [PATCH] Uplink tooling
@@ -8,6 +8,8 @@ Workflows and the GitHub pull request template for this repository.
 ----- Uplink: internal below this line -----
 
 internal-only; not submitted upstream.
+
+Uplink-Patch-Id: upl_00a3ebfdef
 ---
  .github/actions/install-git-uplink/action.yml |  37 +++
  .github/pull_request_template.md              |  23 ++
