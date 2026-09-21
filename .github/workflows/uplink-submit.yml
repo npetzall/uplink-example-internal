@@ -1,0 +1,191 @@
+# example-github forge pack (`git uplink init --forge example-github`).
+# Installs git-uplink on the runner.
+# CONTRIBUTION / IP gate. Packet, optional company assessment hook artifact, then
+# to-upstream environment. Empty UPLINK_CONTRIB_AUTH defaults to pat.
+# Origin reads and uplink/state fast-forwards use the Actions token
+# (UPLINK_INTERNAL_TOKEN). Contrib force-push still mints UPLINK_CONTRIB_*.
+name: Uplink submit
+run-name: Uplink submit ${{ inputs.patch_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      patch_id:
+        description: Patch id to export (upl_…)
+        required: true
+
+permissions: {}
+
+jobs:
+  packet:
+    name: Write contribution packet
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: uplink-mutate
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          src: ${{ vars.UPLINK_SRC }}
+          rev: ${{ vars.UPLINK_REV }}
+
+      - name: Write approver packet
+        env:
+          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PATCH_ID: ${{ inputs.patch_id }}
+        run: |
+          git uplink init
+          git uplink report "$PATCH_ID"
+          git push origin uplink/state
+
+  finalize:
+    name: Apply company packet extras
+    needs: packet
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: uplink-mutate
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          src: ${{ vars.UPLINK_SRC }}
+          rev: ${{ vars.UPLINK_REV }}
+
+      - name: Dispatch company packet hooks
+        id: hooks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PATCH_ID: ${{ inputs.patch_id }}
+          CALLER_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "HEAD:.github/workflows/uplink-assessment-hook.yml" 2>/dev/null; then
+            echo "No .github/workflows/uplink-assessment-hook.yml on this ref; skipping extras."
+            echo "run_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh workflow run uplink-assessment-hook.yml --ref "${GITHUB_REF_NAME}" \
+            -f "patch_id=${PATCH_ID}" \
+            -f "caller_run_id=${CALLER_RUN_ID}"
+          run_id=""
+          for _ in $(seq 1 30); do
+            run_id=$(gh run list --workflow=uplink-assessment-hook.yml --event=workflow_dispatch --limit 20 \
+              --json databaseId,displayTitle \
+              --jq "[.[] | select((.displayTitle // \"\") | contains(\"${CALLER_RUN_ID}\") and contains(\"${PATCH_ID}\")) | .databaseId][0] // empty")
+            if [ -n "$run_id" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$run_id" ]; then
+            echo "Timed out waiting for Uplink assessment hook run (patch ${PATCH_ID}, caller ${CALLER_RUN_ID})"
+            exit 1
+          fi
+          gh run watch "$run_id" --exit-status
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+
+      # v8 has no if-no-artifact-found; ignore a hook that uploaded nothing.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: steps.hooks.outputs.run_id != ''
+        continue-on-error: true
+        with:
+          name: uplink-packet-extra
+          path: ${{ runner.temp }}/uplink-packet-extra
+          run-id: ${{ steps.hooks.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reassemble packet with extras
+        env:
+          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PATCH_ID: ${{ inputs.patch_id }}
+          EXTRA_DIR: ${{ runner.temp }}/uplink-packet-extra
+        run: |
+          set -euo pipefail
+          git uplink init
+          if [ -d "$EXTRA_DIR" ] && find "$EXTRA_DIR" -name '*.md' -type f | grep -q .; then
+            git uplink report "$PATCH_ID" --extra-dir "$EXTRA_DIR"
+            git push origin uplink/state
+          else
+            packet=$(git show "uplink/state:.uplink/reports/${PATCH_ID}/assessment.md")
+            printf '%s\n' "$packet" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Do not put uplink-mutate on this job. A required-reviewer environment
+  # holds its concurrency group the whole time the job is Waiting, which
+  # would freeze import/resolve/transfer and block resolve's cancel+redispatch.
+  submit:
+    name: Approve to-upstream environment and submit
+    needs: finalize
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: write
+    environment:
+      name: to-upstream
+      url: ${{ github.server_url }}/${{ github.repository }}/blob/uplink/state/.uplink/reports/${{ inputs.patch_id }}/assessment.md
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: main
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          src: ${{ vars.UPLINK_SRC }}
+          rev: ${{ vars.UPLINK_REV }}
+      - name: Mint contrib GitHub App token
+        id: contrib-app
+        if: ${{ vars.UPLINK_CONTRIB_AUTH == 'app' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.UPLINK_CONTRIB_APP_ID }}
+          private-key: ${{ secrets.UPLINK_CONTRIB_APP_PRIVATE_KEY }}
+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
+          repositories: ${{ secrets.UPLINK_CONTRIB_REPO }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Record approval, export, and record the public PR
+        env:
+          GH_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
+          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPLINK_CONTRIB_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
+          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
+          UPLINK_TO_UPSTREAM_ENVIRONMENT: to-upstream
+          PATCH_ID: ${{ inputs.patch_id }}
+        run: |
+          git uplink init
+          git uplink approve "$PATCH_ID"
+          submit_json=$(git uplink submit "$PATCH_ID")
+
+          repo=$(jq -r '.gh.prCreate.repo // empty' <<<"$submit_json")
+          head=$(jq -r '.gh.prCreate.head // empty' <<<"$submit_json")
+          url=$(jq -r '.existingPr.url // empty' <<<"$submit_json")
+          if [ -z "$url" ] && [ -n "$repo" ] && [ -n "$head" ]; then
+            url=$(gh pr list -R "$repo" --head "$head" --state open --json url --jq '.[0].url')
+          fi
+          if [ -z "$url" ]; then
+            url=$(gh pr create -R "$repo" \
+              --head "$head" \
+              --base "$(jq -r .gh.prCreate.base <<<"$submit_json")" \
+              --title "$(jq -r .gh.prCreate.title <<<"$submit_json")" \
+              --body-file "$(jq -r .gh.prCreate.bodyFile <<<"$submit_json")")
+          fi
+          git uplink submitted "$PATCH_ID" --pr-url "$url"
