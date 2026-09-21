@@ -14,6 +14,61 @@
     "exportAuthorEmail": "uplink@users.noreply.github.com",
     "forge": "example-github"
   },
+  "tooling": {
+    "id": "upl_00a3ebfdef",
+    "title": "Uplink tooling",
+    "commitMessage": "Uplink tooling\n\nWorkflows and the GitHub pull request template for this repository.\n\n----- Uplink: internal below this line -----\n\ninternal-only; not submitted upstream.",
+    "status": "queued",
+    "dependsOn": [],
+    "createdAt": "2026-09-21T20:00:28.291Z",
+    "updatedAt": "2026-09-21T20:00:28.291Z",
+    "patchIdStable": "d22139463a7856975e152739d4ee5aec6a344373",
+    "source": {
+      "note": "forge example-github"
+    },
+    "assess": {
+      "at": "2026-09-21T20:00:28.291Z",
+      "ok": true,
+      "commitMessage": "Uplink tooling\n\nWorkflows and the GitHub pull request template for this repository.\n\n----- Uplink: internal below this line -----\n\ninternal-only; not submitted upstream.",
+      "publicSubject": "Uplink tooling",
+      "publicBody": "Workflows and the GitHub pull request template for this repository.",
+      "authorName": "Uplink Contributor",
+      "authorEmail": "uplink@users.noreply.github.com",
+      "originalAuthor": "Uplink Bot",
+      "originalEmail": "uplink@company.example",
+      "cutoffFound": true,
+      "checks": [
+        {
+          "id": "message-scrubbed",
+          "status": "pass",
+          "detail": "Internal section removed. Public body is what upstream will see."
+        },
+        {
+          "id": "cutoff-used",
+          "status": "pass",
+          "detail": "Cutoff “----- Uplink: internal below this line -----” found."
+        },
+        {
+          "id": "author-rewrite",
+          "status": "pass",
+          "detail": "Export author Uplink Contributor <uplink@users.noreply.github.com> (was Uplink Bot <uplink@company.example>). Company main still records the Uplink bot."
+        },
+        {
+          "id": "affiliation-leak",
+          "status": "skip",
+          "detail": "internal-only patches are not exported; keyword scan skipped."
+        }
+      ]
+    },
+    "events": [
+      {
+        "at": "2026-09-21T20:00:28.291Z",
+        "type": "created",
+        "detail": "Installed example-github forge pack as internal-only tooling"
+      }
+    ],
+    "kind": "uplink-tooling"
+  },
   "upstream": [],
   "internal": []
 }
