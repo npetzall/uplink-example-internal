@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "config": {
+    "upstreamRemote": "upstream",
+    "upstreamBranch": "main",
+    "contribRemote": "contrib",
+    "internalBranch": "main",
+    "upstreamUrl": "git@github.com:npetzall/uplink-example-upstream.git",
+    "contribUrl": "git@github.com:npetzall-contrib-a/uplink-example-upstream-contrib.git",
+    "stateBranch": "uplink/state",
+    "trailerKey": "Uplink-Patch-Id",
+    "cutoffMarker": "----- Uplink: internal below this line -----",
+    "exportAuthorName": "Uplink Contributor",
+    "exportAuthorEmail": "uplink@users.noreply.github.com",
+    "forge": "example-github"
+  },
+  "upstream": [],
+  "internal": []
+}
