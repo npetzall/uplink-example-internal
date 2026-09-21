@@ -27,13 +27,13 @@
     "status": "queued",
     "dependsOn": [],
     "createdAt": "2026-09-21T20:00:28.291Z",
-    "updatedAt": "2026-09-21T20:00:28.291Z",
-    "patchIdStable": "d22139463a7856975e152739d4ee5aec6a344373",
+    "updatedAt": "2026-09-21T21:37:20.628Z",
+    "patchIdStable": "bb749541e6c2b15fe689a7a941735d13711cc730",
     "source": {
       "note": "forge example-github"
     },
     "assess": {
-      "at": "2026-09-21T20:00:28.291Z",
+      "at": "2026-09-21T21:37:20.628Z",
       "ok": true,
       "commitMessage": "Uplink tooling\n\nWorkflows and the GitHub pull request template for this repository.\n\n----- Uplink: internal below this line -----\n\ninternal-only; not submitted upstream.",
       "publicSubject": "Uplink tooling",
@@ -71,6 +71,11 @@
         "at": "2026-09-21T20:00:28.291Z",
         "type": "created",
         "detail": "Installed example-github forge pack as internal-only tooling"
+      },
+      {
+        "at": "2026-09-21T21:37:20.628Z",
+        "type": "upgraded",
+        "detail": "Refreshed example-github forge pack from embedded templates"
       }
     ],
     "kind": "uplink-tooling"

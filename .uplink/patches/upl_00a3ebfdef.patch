@@ -1,6 +1,6 @@
-From 23220f0476f33921fd5e325c476158740af41682 Mon Sep 17 00:00:00 2001
+From e40f2700dde01f86dcd171ee24bc3dbe9cabc5a5 Mon Sep 17 00:00:00 2001
 From: Uplink Bot <uplink@company.example>
-Date: Mon, 21 Sep 2026 22:00:28 +0200
+Date: Mon, 21 Sep 2026 23:37:20 +0200
 Subject: [PATCH] Uplink tooling
 
 Workflows and the GitHub pull request template for this repository.
@@ -8,21 +8,19 @@ Workflows and the GitHub pull request template for this repository.
 ----- Uplink: internal below this line -----
 
 internal-only; not submitted upstream.
-
-Uplink-Patch-Id: upl_00a3ebfdef
 ---
  .github/actions/install-git-uplink/action.yml |  37 +++
  .github/pull_request_template.md              |  23 ++
  .github/uplink-pack-files-ruleset.json        |  33 +++
  .github/workflows/uplink-abandon.yml          | 104 +++++++
- .github/workflows/uplink-gate.yml             |  75 +++++
- .github/workflows/uplink-import.yml           |  81 ++++++
- .github/workflows/uplink-pr.yml               | 114 ++++++++
- .github/workflows/uplink-resolve.yml          | 149 ++++++++++
- .github/workflows/uplink-submit.yml           | 223 ++++++++++++++
- .github/workflows/uplink-sync.yml             | 230 +++++++++++++++
- .github/workflows/uplink-transfer.yml         | 272 ++++++++++++++++++
- 11 files changed, 1341 insertions(+)
+ .github/workflows/uplink-gate.yml             |  82 ++++++
+ .github/workflows/uplink-import.yml           |  82 ++++++
+ .github/workflows/uplink-pr.yml               | 119 ++++++++
+ .github/workflows/uplink-resolve.yml          | 150 ++++++++++
+ .github/workflows/uplink-submit.yml           | 191 ++++++++++++
+ .github/workflows/uplink-sync.yml             | 232 +++++++++++++++
+ .github/workflows/uplink-transfer.yml         | 274 ++++++++++++++++++
+ 11 files changed, 1327 insertions(+)
  create mode 100644 .github/actions/install-git-uplink/action.yml
  create mode 100644 .github/pull_request_template.md
  create mode 100644 .github/uplink-pack-files-ruleset.json
@@ -258,13 +256,15 @@ index 0000000000000000000000000000000000000000..4a613d5a2617452f6e4b31b31b88aad0
 +          fi
 diff --git a/.github/workflows/uplink-gate.yml b/.github/workflows/uplink-gate.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..04b289abc058f9e371bcb7c7d9010bdd3e44f632
+index 0000000000000000000000000000000000000000..d2fb644fc238510f21c6498c29967fd3b21bbf66
 --- /dev/null
 +++ b/.github/workflows/uplink-gate.yml
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,82 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Required check on PRs into protected uplink bases. These PRs are not imports.
 +# YAML is loaded from the default branch so *-work cannot replace this sidecar.
++# Origin fetch uses the Actions token as UPLINK_INTERNAL_TOKEN (contents: read).
++# The shell git fetch of the protected base uses that token for one command.
 +name: Uplink gate
 +
 +on: # zizmor: ignore[dangerous-triggers] YAML from default branch; gated tree is data; contents: read; persist-credentials: false
@@ -303,6 +303,7 @@ index 0000000000000000000000000000000000000000..04b289abc058f9e371bcb7c7d9010bdd
 +
 +      - name: Validate gated work
 +        env:
++          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
 +          BASE_REF: ${{ github.event.pull_request.base.ref }}
 +          FROM_SHA: ${{ github.event.pull_request.base.sha }}
@@ -311,7 +312,11 @@ index 0000000000000000000000000000000000000000..04b289abc058f9e371bcb7c7d9010bdd
 +          BODY: ${{ github.event.pull_request.body }}
 +        run: |
 +          git uplink init
-+          git fetch origin "$BASE_REF" --depth=1
++          auth=$(printf 'x-access-token:%s' "$UPLINK_INTERNAL_TOKEN" | base64 -w0)
++          git \
++            -c "http.${GITHUB_SERVER_URL}/.extraheader=" \
++            -c "http.${GITHUB_SERVER_URL}/.extraheader=Authorization: Basic ${auth}" \
++            fetch origin "$BASE_REF" --depth=1
 +          if git diff --name-only "$FROM_SHA" "$HEAD_SHA" | grep -E \
 +            -q '^(\.github/workflows/uplink-.*\.yml|\.github/actions/install-git-uplink/)'; then
 +            echo "Gated PRs must not change Uplink pack files (uplink-*.yml / install-git-uplink)."
@@ -339,10 +344,10 @@ index 0000000000000000000000000000000000000000..04b289abc058f9e371bcb7c7d9010bdd
 +          fi
 diff --git a/.github/workflows/uplink-import.yml b/.github/workflows/uplink-import.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..ab8c74d0c7dce1b8a95f811d439ae0dfcbde96ed
+index 0000000000000000000000000000000000000000..218878ffb42f25a92aa6d5c5601fdeb4c03b71aa
 --- /dev/null
 +++ b/.github/workflows/uplink-import.yml
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,82 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# Empty UPLINK_*_AUTH defaults to pat.
@@ -397,6 +402,7 @@ index 0000000000000000000000000000000000000000..ab8c74d0c7dce1b8a95f811d439ae0df
 +          FROM_SHA: ${{ github.event.pull_request.base.sha }}
 +          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
 +          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
 +          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
 +        run: |
@@ -426,15 +432,16 @@ index 0000000000000000000000000000000000000000..ab8c74d0c7dce1b8a95f811d439ae0df
 +          fi
 diff --git a/.github/workflows/uplink-pr.yml b/.github/workflows/uplink-pr.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..8bc3d1f72c59813dc7b0f7356610d62a5d15e498
+index 0000000000000000000000000000000000000000..2c3616e64ba5c5cf7dc784e10749264768fb9977
 --- /dev/null
 +++ b/.github/workflows/uplink-pr.yml
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,119 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +#
 +# Parallel required checks on every internal PR to company main except
 +# uplink:internal-only. See templates/ghec/.github/workflows/uplink-pr.yml.
++# Origin fetch uses the Actions token as UPLINK_INTERNAL_TOKEN (contents: read).
 +#
 +# Company extras for the IP packet are not collected here (no patch id
 +# yet). Add `.github/workflows/uplink-assessment-hook.yml` and see
@@ -475,6 +482,8 @@ index 0000000000000000000000000000000000000000..8bc3d1f72c59813dc7b0f7356610d62a
 +      - name: Assess contribution
 +        env:
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
++          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +          UPLINK_REDACT_KEYWORDS: ${{ vars.UPLINK_REDACT_KEYWORDS }}
 +          UPLINK_INTERNAL_DOMAINS: ${{ vars.UPLINK_INTERNAL_DOMAINS }}
 +          UPLINK_EXPORT_AUTHOR: ${{ vars.UPLINK_EXPORT_AUTHOR }}
@@ -520,6 +529,8 @@ index 0000000000000000000000000000000000000000..8bc3d1f72c59813dc7b0f7356610d62a
 +      - name: Export preflight
 +        env:
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
++          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
 +          TITLE: ${{ github.event.pull_request.title }}
 +          BODY: ${{ github.event.pull_request.body }}
@@ -546,10 +557,10 @@ index 0000000000000000000000000000000000000000..8bc3d1f72c59813dc7b0f7356610d62a
 +          fi
 diff --git a/.github/workflows/uplink-resolve.yml b/.github/workflows/uplink-resolve.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..5a093777733f82b4b28268dd2817c38affd66c84
+index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c159029d78d
 --- /dev/null
 +++ b/.github/workflows/uplink-resolve.yml
-@@ -0,0 +1,149 @@
+@@ -0,0 +1,150 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# Empty UPLINK_*_AUTH defaults to pat.
@@ -620,6 +631,7 @@ index 0000000000000000000000000000000000000000..5a093777733f82b4b28268dd2817c38a
 +      - name: Resolve patch and rebuild main
 +        env:
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
 +          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
 +          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
 +          BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -701,14 +713,16 @@ index 0000000000000000000000000000000000000000..5a093777733f82b4b28268dd2817c38a
 +          git push origin --delete "uplink/conflict/${id}-work" || true
 diff --git a/.github/workflows/uplink-submit.yml b/.github/workflows/uplink-submit.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..f349ecd402b9b97fd53eca91c4cb82eeea802f86
+index 0000000000000000000000000000000000000000..5cc085000332daca8dd035db290b008913b9b667
 --- /dev/null
 +++ b/.github/workflows/uplink-submit.yml
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,191 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# CONTRIBUTION / IP gate. Packet, optional company assessment hook artifact, then
-+# to-upstream environment. Empty UPLINK_*_AUTH defaults to pat.
++# to-upstream environment. Empty UPLINK_CONTRIB_AUTH defaults to pat.
++# Origin reads and uplink/state fast-forwards use the Actions token
++# (UPLINK_INTERNAL_TOKEN). Contrib force-push still mints UPLINK_CONTRIB_*.
 +name: Uplink submit
 +run-name: Uplink submit ${{ inputs.patch_id }}
 +
@@ -740,21 +754,10 @@ index 0000000000000000000000000000000000000000..f349ecd402b9b97fd53eca91c4cb82ee
 +        with:
 +          src: ${{ vars.UPLINK_SRC }}
 +          rev: ${{ vars.UPLINK_REV }}
-+      - name: Mint internal GitHub App token
-+        id: internal-app
-+        if: ${{ vars.UPLINK_INTERNAL_AUTH == 'app' }}
-+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-+        with:
-+          app-id: ${{ secrets.UPLINK_INTERNAL_APP_ID }}
-+          private-key: ${{ secrets.UPLINK_INTERNAL_APP_PRIVATE_KEY }}
-+          owner: ${{ github.repository_owner }}
-+          repositories: ${{ github.event.repository.name }}
-+          permission-contents: write
-+          permission-workflows: write
 +
 +      - name: Write approver packet
 +        env:
-+          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
++          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +          PATCH_ID: ${{ inputs.patch_id }}
 +        run: |
 +          git uplink init
@@ -782,17 +785,6 @@ index 0000000000000000000000000000000000000000..f349ecd402b9b97fd53eca91c4cb82ee
 +        with:
 +          src: ${{ vars.UPLINK_SRC }}
 +          rev: ${{ vars.UPLINK_REV }}
-+      - name: Mint internal GitHub App token
-+        id: internal-app
-+        if: ${{ vars.UPLINK_INTERNAL_AUTH == 'app' }}
-+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-+        with:
-+          app-id: ${{ secrets.UPLINK_INTERNAL_APP_ID }}
-+          private-key: ${{ secrets.UPLINK_INTERNAL_APP_PRIVATE_KEY }}
-+          owner: ${{ github.repository_owner }}
-+          repositories: ${{ github.event.repository.name }}
-+          permission-contents: write
-+          permission-workflows: write
 +
 +      - name: Dispatch company packet hooks
 +        id: hooks
@@ -839,7 +831,7 @@ index 0000000000000000000000000000000000000000..f349ecd402b9b97fd53eca91c4cb82ee
 +
 +      - name: Reassemble packet with extras
 +        env:
-+          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
++          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +          PATCH_ID: ${{ inputs.patch_id }}
 +          EXTRA_DIR: ${{ runner.temp }}/uplink-packet-extra
 +        run: |
@@ -877,18 +869,6 @@ index 0000000000000000000000000000000000000000..f349ecd402b9b97fd53eca91c4cb82ee
 +        with:
 +          src: ${{ vars.UPLINK_SRC }}
 +          rev: ${{ vars.UPLINK_REV }}
-+      - name: Mint internal GitHub App token
-+        id: internal-app
-+        if: ${{ vars.UPLINK_INTERNAL_AUTH == 'app' }}
-+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-+        with:
-+          app-id: ${{ secrets.UPLINK_INTERNAL_APP_ID }}
-+          private-key: ${{ secrets.UPLINK_INTERNAL_APP_PRIVATE_KEY }}
-+          owner: ${{ github.repository_owner }}
-+          repositories: ${{ github.event.repository.name }}
-+          permission-contents: write
-+          permission-workflows: write
-+
 +      - name: Mint contrib GitHub App token
 +        id: contrib-app
 +        if: ${{ vars.UPLINK_CONTRIB_AUTH == 'app' }}
@@ -904,7 +884,7 @@ index 0000000000000000000000000000000000000000..f349ecd402b9b97fd53eca91c4cb82ee
 +      - name: Record approval, export, and record the public PR
 +        env:
 +          GH_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
-+          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
++          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +          UPLINK_CONTRIB_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
 +          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
 +          UPLINK_TO_UPSTREAM_ENVIRONMENT: to-upstream
@@ -930,10 +910,10 @@ index 0000000000000000000000000000000000000000..f349ecd402b9b97fd53eca91c4cb82ee
 +          git uplink submitted "$PATCH_ID" --pr-url "$url"
 diff --git a/.github/workflows/uplink-sync.yml b/.github/workflows/uplink-sync.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..57cf5827ed3dab60f63c781ee1af3aba51095800
+index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141f469a7f4
 --- /dev/null
 +++ b/.github/workflows/uplink-sync.yml
-@@ -0,0 +1,230 @@
+@@ -0,0 +1,232 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink and is
 +# workflow_dispatch only (no hourly cron) so a walkthrough is not raced.
@@ -1000,6 +980,7 @@ index 0000000000000000000000000000000000000000..57cf5827ed3dab60f63c781ee1af3aba
 +        id: sync
 +        env:
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
 +          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
 +          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
 +        run: |
@@ -1117,6 +1098,7 @@ index 0000000000000000000000000000000000000000..57cf5827ed3dab60f63c781ee1af3aba
 +      - name: Accept pending upstream
 +        env:
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
 +          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
 +          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
 +          UPLINK_FROM_UPSTREAM_ENVIRONMENT: from-upstream
@@ -1166,10 +1148,10 @@ index 0000000000000000000000000000000000000000..57cf5827ed3dab60f63c781ee1af3aba
 +          git uplink gated "$conflict_id" --pr-url "$url"
 diff --git a/.github/workflows/uplink-transfer.yml b/.github/workflows/uplink-transfer.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..6cc62a8fef3d048efbad6b7da9db2d323407d4f1
+index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c50670832341
 --- /dev/null
 +++ b/.github/workflows/uplink-transfer.yml
-@@ -0,0 +1,272 @@
+@@ -0,0 +1,274 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# Empty UPLINK_*_AUTH defaults to pat.
@@ -1257,6 +1239,7 @@ index 0000000000000000000000000000000000000000..6cc62a8fef3d048efbad6b7da9db2d32
 +      - name: Transfer patch
 +        env:
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
 +          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
 +          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
 +          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
@@ -1356,6 +1339,7 @@ index 0000000000000000000000000000000000000000..6cc62a8fef3d048efbad6b7da9db2d32
 +      - name: Complete gated transfer
 +        env:
 +          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GH_REPO: ${{ github.repository }}
 +          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
 +          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
 +          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
