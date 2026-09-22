@@ -13,5 +13,5 @@ export function hash(value) {
 }
 
 export function ttl() {
-  return 3600;
+  return 7200;
 }
