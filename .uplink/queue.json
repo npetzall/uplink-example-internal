@@ -5,7 +5,7 @@
     "upstreamBranch": "main",
     "contribRemote": "contrib",
     "internalBranch": "main",
-    "upstreamUrl": "git@github.com:npetzall/uplink-example-upstream.git",
+    "upstreamUrl": "git@github.com:npetzall-contrib-a/uplink-example-upstream.git",
     "contribUrl": "git@github.com:npetzall-contrib-a/uplink-example-upstream-contrib.git",
     "stateBranch": "uplink/state",
     "trailerKey": "Uplink-Patch-Id",
