@@ -1,6 +1,6 @@
-From 668e06f7645d20a06e5bf17b4013baa834571270 Mon Sep 17 00:00:00 2001
+From 365c6fec4c615c4c94a5b2ad0b74847ab816c8d7 Mon Sep 17 00:00:00 2001
 From: Uplink Bot <uplink@company.example>
-Date: Mon, 21 Sep 2026 23:37:20 +0200
+Date: Wed, 23 Sep 2026 23:02:40 +0200
 Subject: [PATCH] Uplink tooling
 
 Workflows and the GitHub pull request template for this repository.
@@ -11,18 +11,18 @@ internal-only; not submitted upstream.
 
 Uplink-Patch-Id: upl_00a3ebfdef
 ---
- .github/actions/install-git-uplink/action.yml |  37 +++
+ .github/actions/install-git-uplink/action.yml |  37 ++
  .github/pull_request_template.md              |  23 ++
- .github/uplink-pack-files-ruleset.json        |  33 +++
- .github/workflows/uplink-abandon.yml          | 104 +++++++
- .github/workflows/uplink-gate.yml             |  82 ++++++
- .github/workflows/uplink-import.yml           |  82 ++++++
- .github/workflows/uplink-pr.yml               | 119 ++++++++
- .github/workflows/uplink-resolve.yml          | 150 ++++++++++
- .github/workflows/uplink-submit.yml           | 191 ++++++++++++
- .github/workflows/uplink-sync.yml             | 232 +++++++++++++++
- .github/workflows/uplink-transfer.yml         | 274 ++++++++++++++++++
- 11 files changed, 1327 insertions(+)
+ .github/uplink-pack-files-ruleset.json        |  33 ++
+ .github/workflows/uplink-abandon.yml          | 162 ++++++++
+ .github/workflows/uplink-gate.yml             |  82 ++++
+ .github/workflows/uplink-import.yml           |  87 +++++
+ .github/workflows/uplink-pr.yml               | 119 ++++++
+ .github/workflows/uplink-resolve.yml          | 191 ++++++++++
+ .github/workflows/uplink-submit.yml           | 260 +++++++++++++
+ .github/workflows/uplink-sync.yml             | 318 ++++++++++++++++
+ .github/workflows/uplink-transfer.yml         | 358 ++++++++++++++++++
+ 11 files changed, 1670 insertions(+)
  create mode 100644 .github/actions/install-git-uplink/action.yml
  create mode 100644 .github/pull_request_template.md
  create mode 100644 .github/uplink-pack-files-ruleset.json
@@ -148,17 +148,19 @@ index 0000000000000000000000000000000000000000..5eba6a78b7b9b08f1ab4f78f75c9a0f3
 +}
 diff --git a/.github/workflows/uplink-abandon.yml b/.github/workflows/uplink-abandon.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..4a613d5a2617452f6e4b31b31b88aad0c8471c55
+index 0000000000000000000000000000000000000000..1aa599fe750a9e491c6b6f263d9771d4ee009e31
 --- /dev/null
 +++ b/.github/workflows/uplink-abandon.yml
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,162 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Empty UPLINK_*_AUTH defaults to pat.
 +#
 +# Detached public cleanup after --to-internal of a submitted patch.
 +# Transfer dispatches this workflow and does not wait. Contrib credentials
 +# live on Environment `abandon-contrib` (same secrets as to-upstream,
-+# different reviewers). This job must not take uplink-mutate.
++# different reviewers). Closing the public PR uses repository
++# UPLINK_UPSTREAM_* (pull requests write on the parent). Deleting the fork
++# branch uses UPLINK_CONTRIB_*. This job must not take uplink-mutate.
 +#
 +# Until reviewers approve abandon-contrib, company state is already
 +# internal-only while the public PR and uplink/<id> fork branch remain.
@@ -190,27 +192,83 @@ index 0000000000000000000000000000000000000000..4a613d5a2617452f6e4b31b31b88aad0
 +    if: github.ref == 'refs/heads/main'
 +    runs-on: ubuntu-latest
 +    permissions:
++      contents: read
 +      deployments: write
 +    environment:
 +      name: abandon-contrib
 +    steps:
++      - name: Read upstream and contrib from the queue
++        id: queue
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          set -euo pipefail
++          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
++          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
++          parse_owner_repo() {
++            local url=$1 owner repo
++            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
++              owner=${BASH_REMATCH[1]}
++              repo=${BASH_REMATCH[2]}
++              repo=${repo%.git}
++              repo=${repo%/}
++              printf '%s\n%s\n' "$owner" "$repo"
++              return 0
++            fi
++            echo "Could not parse GitHub owner/repo from queue URL" >&2
++            return 1
++          }
++          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
++          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
++          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
++            echo "queue.json is missing upstreamUrl or contribUrl" >&2
++            exit 1
++          fi
++          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
++          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
++          same_owner=false
++          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
++          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
++          if [ "$upstream_lc" = "$contrib_lc" ]; then
++            same_owner=true
++          fi
++          {
++            echo "upstream_owner=${upstream[0]}"
++            echo "upstream_repo=${upstream[1]}"
++            echo "contrib_owner=${contrib[0]}"
++            echo "contrib_repo=${contrib[1]}"
++            echo "same_owner=${same_owner}"
++          } >> "$GITHUB_OUTPUT"
++
 +      - name: Mint contrib GitHub App token
 +        id: contrib-app
-+        if: ${{ vars.UPLINK_CONTRIB_AUTH == 'app' }}
++        if: ${{ vars.UPLINK_CONTRIB_AUTH == 'app' && steps.queue.outputs.same_owner == 'true' }}
 +        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
 +        with:
 +          app-id: ${{ secrets.UPLINK_CONTRIB_APP_ID }}
 +          private-key: ${{ secrets.UPLINK_CONTRIB_APP_PRIVATE_KEY }}
-+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          repositories: ${{ secrets.UPLINK_CONTRIB_REPO }}
++          owner: ${{ steps.queue.outputs.contrib_owner }}
++          repositories: ${{ steps.queue.outputs.contrib_repo }}
 +          permission-contents: write
++
++      - name: Mint upstream GitHub App token
++        id: upstream-app
++        if: ${{ vars.UPLINK_UPSTREAM_AUTH == 'app' && steps.queue.outputs.same_owner == 'true' }}
++        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
++        with:
++          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
++          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
++          owner: ${{ steps.queue.outputs.upstream_owner }}
++          repositories: ${{ steps.queue.outputs.upstream_repo }},${{ steps.queue.outputs.contrib_repo }}
++          permission-contents: read
 +          permission-pull-requests: write
 +
 +      - name: Close PR and delete fork branch
 +        env:
-+          GH_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
-+          UPLINK_UPSTREAM_OWNER: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          UPLINK_CONTRIB_REPO: ${{ secrets.UPLINK_CONTRIB_REPO }}
++          GH_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
++          UPLINK_CONTRIB_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
++          UPLINK_CONTRIB_OWNER: ${{ steps.queue.outputs.contrib_owner }}
++          UPLINK_CONTRIB_REPO: ${{ steps.queue.outputs.contrib_repo }}
 +          PATCH_ID: ${{ inputs.patch_id }}
 +          PR_URL: ${{ inputs.pr_url }}
 +          CONTRIB_BRANCH: ${{ inputs.contrib_branch }}
@@ -239,8 +297,8 @@ index 0000000000000000000000000000000000000000..4a613d5a2617452f6e4b31b31b88aad0
 +              branch=$(gh pr view "$PR_URL" --json headRefName --jq '.headRefName // empty' || true)
 +            fi
 +          fi
-+          if [ -z "$repo" ] && [ -n "$UPLINK_UPSTREAM_OWNER" ] && [ -n "$UPLINK_CONTRIB_REPO" ]; then
-+            repo="${UPLINK_UPSTREAM_OWNER}/${UPLINK_CONTRIB_REPO}"
++          if [ -z "$repo" ] && [ -n "$UPLINK_CONTRIB_OWNER" ] && [ -n "$UPLINK_CONTRIB_REPO" ]; then
++            repo="${UPLINK_CONTRIB_OWNER}/${UPLINK_CONTRIB_REPO}"
 +          fi
 +          if [ -z "$branch" ]; then
 +            echo "No contrib branch to delete for ${PATCH_ID}"
@@ -250,8 +308,8 @@ index 0000000000000000000000000000000000000000..4a613d5a2617452f6e4b31b31b88aad0
 +            echo "Cannot resolve contrib repository for ${branch}"
 +            exit 1
 +          fi
-+          if ! gh api --method DELETE "repos/${repo}/git/refs/heads/${branch}"; then
-+            if gh api "repos/${repo}/git/refs/heads/${branch}" >/dev/null 2>&1; then
++          if ! GH_TOKEN="$UPLINK_CONTRIB_TOKEN" gh api --method DELETE "repos/${repo}/git/refs/heads/${branch}"; then
++            if GH_TOKEN="$UPLINK_CONTRIB_TOKEN" gh api "repos/${repo}/git/refs/heads/${branch}" >/dev/null 2>&1; then
 +              echo "failed to delete ${repo} ${branch}"
 +              exit 1
 +            fi
@@ -346,10 +404,10 @@ index 0000000000000000000000000000000000000000..d2fb644fc238510f21c6498c29967fd3
 +          fi
 diff --git a/.github/workflows/uplink-import.yml b/.github/workflows/uplink-import.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..218878ffb42f25a92aa6d5c5601fdeb4c03b71aa
+index 0000000000000000000000000000000000000000..3fd841a9319bb0d89dd0a276066ff64bca6af2dd
 --- /dev/null
 +++ b/.github/workflows/uplink-import.yml
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,87 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# Empty UPLINK_*_AUTH defaults to pat.
@@ -361,7 +419,7 @@ index 0000000000000000000000000000000000000000..218878ffb42f25a92aa6d5c5601fdeb4
 +
 +concurrency:
 +  group: uplink-mutate
-+  cancel-in-progress: false
++  queue: max
 +
 +permissions:
 +  contents: write
@@ -427,10 +485,15 @@ index 0000000000000000000000000000000000000000..218878ffb42f25a92aa6d5c5601fdeb4
 +            fi
 +            exit "$code"
 +          fi
-+          if [ "$INTERNAL_ONLY" = "true" ]; then
-+            git uplink push
-+          else
++          rebuild=false
++          if [ "$INTERNAL_ONLY" != "true" ]; then
++            active=$(jq '[.internal[]? | select(.status != "merged" and .status != "dropped")] | length' .uplink/queue.json)
++            if [ "$active" != "0" ]; then rebuild=true; fi
++          fi
++          if [ "$rebuild" = "true" ]; then
 +            git uplink rebuild --push
++          else
++            git uplink push
 +          fi
 diff --git a/.github/workflows/uplink-pr.yml b/.github/workflows/uplink-pr.yml
 new file mode 100644
@@ -559,10 +622,10 @@ index 0000000000000000000000000000000000000000..2c3616e64ba5c5cf7dc784e107492647
 +          fi
 diff --git a/.github/workflows/uplink-resolve.yml b/.github/workflows/uplink-resolve.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c159029d78d
+index 0000000000000000000000000000000000000000..4065bf07095df01629903994882c145db09bf99c
 --- /dev/null
 +++ b/.github/workflows/uplink-resolve.yml
-@@ -0,0 +1,150 @@
+@@ -0,0 +1,191 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# Empty UPLINK_*_AUTH defaults to pat.
@@ -579,7 +642,7 @@ index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c15
 +
 +concurrency:
 +  group: uplink-mutate
-+  cancel-in-progress: false
++  queue: max
 +
 +permissions: {}
 +
@@ -604,6 +667,49 @@ index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c15
 +          permission-contents: write
 +          permission-workflows: write
 +
++      - name: Read upstream and contrib from the queue
++        id: queue
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          set -euo pipefail
++          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
++          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
++          parse_owner_repo() {
++            local url=$1 owner repo
++            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
++              owner=${BASH_REMATCH[1]}
++              repo=${BASH_REMATCH[2]}
++              repo=${repo%.git}
++              repo=${repo%/}
++              printf '%s\n%s\n' "$owner" "$repo"
++              return 0
++            fi
++            echo "Could not parse GitHub owner/repo from queue URL" >&2
++            return 1
++          }
++          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
++          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
++          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
++            echo "queue.json is missing upstreamUrl or contribUrl" >&2
++            exit 1
++          fi
++          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
++          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
++          same_owner=false
++          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
++          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
++          if [ "$upstream_lc" = "$contrib_lc" ]; then
++            same_owner=true
++          fi
++          {
++            echo "upstream_owner=${upstream[0]}"
++            echo "upstream_repo=${upstream[1]}"
++            echo "contrib_owner=${contrib[0]}"
++            echo "contrib_repo=${contrib[1]}"
++            echo "same_owner=${same_owner}"
++          } >> "$GITHUB_OUTPUT"
++
 +      - name: Mint upstream GitHub App token
 +        id: upstream-app
 +        if: ${{ vars.UPLINK_UPSTREAM_AUTH == 'app' }}
@@ -611,8 +717,8 @@ index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c15
 +        with:
 +          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
 +          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
-+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          repositories: ${{ secrets.UPLINK_UPSTREAM_REPO }}
++          owner: ${{ steps.queue.outputs.upstream_owner }}
++          repositories: ${{ steps.queue.outputs.upstream_repo }}
 +          permission-contents: read
 +
 +      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -639,8 +745,6 @@ index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c15
 +          BASE_REF: ${{ github.event.pull_request.base.ref }}
 +        run: |
 +          git uplink init
-+          git fetch origin main
-+          git branch -f main origin/main
 +          id="${BASE_REF#uplink/conflict/}"
 +          if [ -z "$id" ] || [ "$id" = "$BASE_REF" ] || [[ "$id" == *-work ]]; then
 +            echo "Could not parse patch id from $BASE_REF"
@@ -660,7 +764,7 @@ index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c15
 +          git push origin uplink/state
 +          main_after=$(git rev-parse HEAD)
 +          if [ "$main_after" != "$main_before" ]; then
-+            git push origin main --force-with-lease
++            git push origin main --force
 +          fi
 +
 +          status=$(jq -r '.status // empty' <<<"$resolve_json")
@@ -715,16 +819,21 @@ index 0000000000000000000000000000000000000000..412a2d6b2e53645a329621336b9d0c15
 +          git push origin --delete "uplink/conflict/${id}-work" || true
 diff --git a/.github/workflows/uplink-submit.yml b/.github/workflows/uplink-submit.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..5cc085000332daca8dd035db290b008913b9b667
+index 0000000000000000000000000000000000000000..17426835a1bfbe154e885ac37d9146f189dbb71c
 --- /dev/null
 +++ b/.github/workflows/uplink-submit.yml
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,260 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# CONTRIBUTION / IP gate. Packet, optional company assessment hook artifact, then
-+# to-upstream environment. Empty UPLINK_CONTRIB_AUTH defaults to pat.
++# to-upstream environment. Empty UPLINK_*_AUTH defaults to pat.
 +# Origin reads and uplink/state fast-forwards use the Actions token
-+# (UPLINK_INTERNAL_TOKEN). Contrib force-push still mints UPLINK_CONTRIB_*.
++# (UPLINK_INTERNAL_TOKEN). Contrib force-push mints UPLINK_CONTRIB_*.
++# The public pull request is POST /repos/{parent}/pulls with UPLINK_UPSTREAM_*
++# (contents read on the parent and the fork, pull requests write, no contents
++# write on the fork) and maintainer_can_modify false. head is the branch
++# and head_repo is <contrib_owner>/<contrib_repo>.
++# Owner and repo come from queue.json. App mint runs only when both are the same owner.
 +name: Uplink submit
 +run-name: Uplink submit ${{ inputs.patch_id }}
 +
@@ -746,7 +855,7 @@ index 0000000000000000000000000000000000000000..5cc085000332daca8dd035db290b0089
 +      contents: write
 +    concurrency:
 +      group: uplink-mutate
-+      cancel-in-progress: false
++      queue: max
 +    steps:
 +      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 +        with:
@@ -777,7 +886,7 @@ index 0000000000000000000000000000000000000000..5cc085000332daca8dd035db290b0089
 +      actions: write
 +    concurrency:
 +      group: uplink-mutate
-+      cancel-in-progress: false
++      queue: max
 +    steps:
 +      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 +        with:
@@ -871,51 +980,115 @@ index 0000000000000000000000000000000000000000..5cc085000332daca8dd035db290b0089
 +        with:
 +          src: ${{ vars.UPLINK_SRC }}
 +          rev: ${{ vars.UPLINK_REV }}
++      - name: Read upstream and contrib from the queue
++        id: queue
++        env:
++          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          set -euo pipefail
++          config=$(git uplink init --json)
++          jq -r '
++            def owner_repo:
++              sub("\\.git$";"") | sub("/$";"")
++              | capture("github\\.com[:/](?<owner>[^/]+)/(?<repo>.+)$")
++              // error("Could not parse GitHub owner/repo from queue URL");
++            (.upstreamUrl // "") as $u | (.contribUrl // "") as $c
++            | if ($u == "" or $c == "") then error("queue.json is missing upstreamUrl or contribUrl") else . end
++            | ($u | owner_repo) as $up | ($c | owner_repo) as $co
++            | "upstream_owner=\($up.owner)",
++              "upstream_repo=\($up.repo)",
++              "contrib_owner=\($co.owner)",
++              "contrib_repo=\($co.repo)",
++              "same_owner=\(if ($up.owner | ascii_downcase) == ($co.owner | ascii_downcase) then "true" else "false" end)"
++          ' <<<"$config" >> "$GITHUB_OUTPUT"
++
 +      - name: Mint contrib GitHub App token
 +        id: contrib-app
-+        if: ${{ vars.UPLINK_CONTRIB_AUTH == 'app' }}
++        if: ${{ vars.UPLINK_CONTRIB_AUTH == 'app' && steps.queue.outputs.same_owner == 'true' }}
 +        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
 +        with:
 +          app-id: ${{ secrets.UPLINK_CONTRIB_APP_ID }}
 +          private-key: ${{ secrets.UPLINK_CONTRIB_APP_PRIVATE_KEY }}
-+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          repositories: ${{ secrets.UPLINK_CONTRIB_REPO }}
++          owner: ${{ steps.queue.outputs.contrib_owner }}
++          repositories: ${{ steps.queue.outputs.contrib_repo }}
 +          permission-contents: write
++
++      - name: Mint upstream GitHub App token
++        id: upstream-app
++        if: ${{ vars.UPLINK_UPSTREAM_AUTH == 'app' && steps.queue.outputs.same_owner == 'true' }}
++        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
++        with:
++          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
++          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
++          owner: ${{ steps.queue.outputs.upstream_owner }}
++          repositories: ${{ steps.queue.outputs.upstream_repo }},${{ steps.queue.outputs.contrib_repo }}
++          permission-contents: read
 +          permission-pull-requests: write
 +
 +      - name: Record approval, export, and record the public PR
 +        env:
-+          GH_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
++          GH_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
 +          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +          UPLINK_CONTRIB_TOKEN: ${{ steps.contrib-app.outputs.token || secrets.UPLINK_CONTRIB_TOKEN }}
 +          UPLINK_PREFLIGHT: ${{ vars.UPLINK_PREFLIGHT }}
 +          UPLINK_TO_UPSTREAM_ENVIRONMENT: to-upstream
 +          PATCH_ID: ${{ inputs.patch_id }}
++          HEAD_REPO: ${{ steps.queue.outputs.contrib_owner }}/${{ steps.queue.outputs.contrib_repo }}
 +        run: |
-+          git uplink init
 +          git uplink approve "$PATCH_ID"
 +          submit_json=$(git uplink submit "$PATCH_ID")
 +
 +          repo=$(jq -r '.gh.prCreate.repo // empty' <<<"$submit_json")
 +          head=$(jq -r '.gh.prCreate.head // empty' <<<"$submit_json")
++          if [ -n "$repo" ] && [ -n "$head" ]; then
++            parent_owner=${repo%%/*}
++            head_owner=${head%%:*}
++            parent_lc=$(printf '%s' "$parent_owner" | tr '[:upper:]' '[:lower:]')
++            head_lc=$(printf '%s' "$head_owner" | tr '[:upper:]' '[:lower:]')
++            if [ "$parent_lc" = "$head_lc" ]; then
++              account_type=$(gh api "users/${parent_owner}" --jq '.type // empty' || true)
++              if [ "$account_type" = "User" ]; then
++                echo "Upstream and the contribution fork cannot both be under a user account. Fork into the same organization, or use a different owner with a machine user classic PAT."
++                exit 1
++              fi
++            else
++              case "$GH_TOKEN" in
++                ghp_*) ;;
++                *)
++                  echo "Upstream and the contribution fork are different owners. Fine-grained PATs and GitHub App tokens cannot open this pull request. Use a machine user with a classic PAT."
++                  exit 1
++                  ;;
++              esac
++            fi
++          fi
 +          url=$(jq -r '.existingPr.url // empty' <<<"$submit_json")
 +          if [ -z "$url" ] && [ -n "$repo" ] && [ -n "$head" ]; then
-+            url=$(gh pr list -R "$repo" --head "$head" --state open --json url --jq '.[0].url')
++            url=$(gh api --method GET "/repos/${repo}/pulls" -f state=open -f head="$head" --jq '.[0].html_url // empty')
 +          fi
 +          if [ -z "$url" ]; then
-+            url=$(gh pr create -R "$repo" \
-+              --head "$head" \
-+              --base "$(jq -r .gh.prCreate.base <<<"$submit_json")" \
-+              --title "$(jq -r .gh.prCreate.title <<<"$submit_json")" \
-+              --body-file "$(jq -r .gh.prCreate.bodyFile <<<"$submit_json")")
++            title=$(jq -r .gh.prCreate.title <<<"$submit_json")
++            body_file=$(jq -r .gh.prCreate.bodyFile <<<"$submit_json")
++            base=$(jq -r .gh.prCreate.base <<<"$submit_json")
++            branch=$(jq -r '.branch // empty' <<<"$submit_json")
++            url=$(gh api --method POST \
++              -H "Accept: application/vnd.github+json" \
++              -H "X-GitHub-Api-Version: 2022-11-28" \
++              "/repos/${repo}/pulls" \
++              -f title="$title" \
++              -F "body=@${body_file}" \
++              -f head="$branch" \
++              -f head_repo="$HEAD_REPO" \
++              -f base="$base" \
++              -F maintainer_can_modify=false \
++              --jq .html_url)
 +          fi
 +          git uplink submitted "$PATCH_ID" --pr-url "$url"
 diff --git a/.github/workflows/uplink-sync.yml b/.github/workflows/uplink-sync.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141f469a7f4
+index 0000000000000000000000000000000000000000..c4cde2f6f6f335b7298b75e1618fdbf734955bd5
 --- /dev/null
 +++ b/.github/workflows/uplink-sync.yml
-@@ -0,0 +1,232 @@
+@@ -0,0 +1,318 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink and is
 +# workflow_dispatch only (no hourly cron) so a walkthrough is not raced.
@@ -941,7 +1114,7 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +      pull-requests: write
 +    concurrency:
 +      group: uplink-mutate
-+      cancel-in-progress: false
++      queue: max
 +    outputs:
 +      needs_approval: ${{ steps.sync.outputs.needs_approval }}
 +    steps:
@@ -957,6 +1130,49 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +          permission-contents: write
 +          permission-workflows: write
 +
++      - name: Read upstream and contrib from the queue
++        id: queue
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          set -euo pipefail
++          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
++          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
++          parse_owner_repo() {
++            local url=$1 owner repo
++            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
++              owner=${BASH_REMATCH[1]}
++              repo=${BASH_REMATCH[2]}
++              repo=${repo%.git}
++              repo=${repo%/}
++              printf '%s\n%s\n' "$owner" "$repo"
++              return 0
++            fi
++            echo "Could not parse GitHub owner/repo from queue URL" >&2
++            return 1
++          }
++          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
++          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
++          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
++            echo "queue.json is missing upstreamUrl or contribUrl" >&2
++            exit 1
++          fi
++          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
++          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
++          same_owner=false
++          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
++          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
++          if [ "$upstream_lc" = "$contrib_lc" ]; then
++            same_owner=true
++          fi
++          {
++            echo "upstream_owner=${upstream[0]}"
++            echo "upstream_repo=${upstream[1]}"
++            echo "contrib_owner=${contrib[0]}"
++            echo "contrib_repo=${contrib[1]}"
++            echo "same_owner=${same_owner}"
++          } >> "$GITHUB_OUTPUT"
++
 +      - name: Mint upstream GitHub App token
 +        id: upstream-app
 +        if: ${{ vars.UPLINK_UPSTREAM_AUTH == 'app' }}
@@ -964,8 +1180,8 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +        with:
 +          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
 +          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
-+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          repositories: ${{ secrets.UPLINK_UPSTREAM_REPO }}
++          owner: ${{ steps.queue.outputs.upstream_owner }}
++          repositories: ${{ steps.queue.outputs.upstream_repo }}
 +          permission-contents: read
 +
 +      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1003,7 +1219,7 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +
 +          main_after=$(git rev-parse HEAD)
 +          if [ "$main_after" != "$main_before" ]; then
-+            git push origin HEAD:main --force-with-lease
++            git push origin HEAD:main --force
 +          fi
 +
 +          if jq -e '.conflict != null' <<<"$sync_json" >/dev/null; then
@@ -1061,7 +1277,7 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +      pull-requests: write
 +    concurrency:
 +      group: uplink-mutate
-+      cancel-in-progress: false
++      queue: max
 +    steps:
 +      - name: Mint internal GitHub App token
 +        id: internal-app
@@ -1075,6 +1291,49 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +          permission-contents: write
 +          permission-workflows: write
 +
++      - name: Read upstream and contrib from the queue
++        id: queue
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          set -euo pipefail
++          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
++          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
++          parse_owner_repo() {
++            local url=$1 owner repo
++            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
++              owner=${BASH_REMATCH[1]}
++              repo=${BASH_REMATCH[2]}
++              repo=${repo%.git}
++              repo=${repo%/}
++              printf '%s\n%s\n' "$owner" "$repo"
++              return 0
++            fi
++            echo "Could not parse GitHub owner/repo from queue URL" >&2
++            return 1
++          }
++          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
++          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
++          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
++            echo "queue.json is missing upstreamUrl or contribUrl" >&2
++            exit 1
++          fi
++          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
++          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
++          same_owner=false
++          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
++          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
++          if [ "$upstream_lc" = "$contrib_lc" ]; then
++            same_owner=true
++          fi
++          {
++            echo "upstream_owner=${upstream[0]}"
++            echo "upstream_repo=${upstream[1]}"
++            echo "contrib_owner=${contrib[0]}"
++            echo "contrib_repo=${contrib[1]}"
++            echo "same_owner=${same_owner}"
++          } >> "$GITHUB_OUTPUT"
++
 +      - name: Mint upstream GitHub App token
 +        id: upstream-app
 +        if: ${{ vars.UPLINK_UPSTREAM_AUTH == 'app' }}
@@ -1082,8 +1341,8 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +        with:
 +          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
 +          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
-+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          repositories: ${{ secrets.UPLINK_UPSTREAM_REPO }}
++          owner: ${{ steps.queue.outputs.upstream_owner }}
++          repositories: ${{ steps.queue.outputs.upstream_repo }}
 +          permission-contents: read
 +
 +      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1115,7 +1374,7 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +
 +          main_after=$(git rev-parse HEAD)
 +          if [ "$main_after" != "$main_before" ]; then
-+            git push origin HEAD:main --force-with-lease
++            git push origin HEAD:main --force
 +          fi
 +
 +          if ! jq -e '.conflict != null' <<<"$sync_json" >/dev/null; then
@@ -1150,10 +1409,10 @@ index 0000000000000000000000000000000000000000..0e81133e84cd0a427190044c5cb99141
 +          git uplink gated "$conflict_id" --pr-url "$url"
 diff --git a/.github/workflows/uplink-transfer.yml b/.github/workflows/uplink-transfer.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c50670832341
+index 0000000000000000000000000000000000000000..d0a5358ac4683e155432db5876b4f182a6a15acc
 --- /dev/null
 +++ b/.github/workflows/uplink-transfer.yml
-@@ -0,0 +1,274 @@
+@@ -0,0 +1,358 @@
 +# example-github forge pack (`git uplink init --forge example-github`).
 +# Installs git-uplink on the runner.
 +# Empty UPLINK_*_AUTH defaults to pat.
@@ -1190,7 +1449,7 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +
 +concurrency:
 +  group: uplink-mutate
-+  cancel-in-progress: false
++  queue: max
 +
 +permissions: {}
 +
@@ -1216,6 +1475,49 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +          permission-contents: write
 +          permission-workflows: write
 +
++      - name: Read upstream and contrib from the queue
++        id: queue
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          set -euo pipefail
++          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
++          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
++          parse_owner_repo() {
++            local url=$1 owner repo
++            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
++              owner=${BASH_REMATCH[1]}
++              repo=${BASH_REMATCH[2]}
++              repo=${repo%.git}
++              repo=${repo%/}
++              printf '%s\n%s\n' "$owner" "$repo"
++              return 0
++            fi
++            echo "Could not parse GitHub owner/repo from queue URL" >&2
++            return 1
++          }
++          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
++          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
++          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
++            echo "queue.json is missing upstreamUrl or contribUrl" >&2
++            exit 1
++          fi
++          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
++          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
++          same_owner=false
++          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
++          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
++          if [ "$upstream_lc" = "$contrib_lc" ]; then
++            same_owner=true
++          fi
++          {
++            echo "upstream_owner=${upstream[0]}"
++            echo "upstream_repo=${upstream[1]}"
++            echo "contrib_owner=${contrib[0]}"
++            echo "contrib_repo=${contrib[1]}"
++            echo "same_owner=${same_owner}"
++          } >> "$GITHUB_OUTPUT"
++
 +      - name: Mint upstream GitHub App token
 +        id: upstream-app
 +        if: ${{ vars.UPLINK_UPSTREAM_AUTH == 'app' }}
@@ -1223,8 +1525,8 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +        with:
 +          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
 +          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
-+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          repositories: ${{ secrets.UPLINK_UPSTREAM_REPO }}
++          owner: ${{ steps.queue.outputs.upstream_owner }}
++          repositories: ${{ steps.queue.outputs.upstream_repo }}
 +          permission-contents: read
 +
 +      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1257,7 +1559,7 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +            git push origin uplink/state
 +            main_after=$(git rev-parse HEAD)
 +            if [ "$main_after" != "$main_before" ]; then
-+              git push origin HEAD:main --force-with-lease
++              git push origin HEAD:main --force
 +            fi
 +            close_url=$(jq -r '.gh.prClose.url // empty' <<<"$transfer_json")
 +            close_branch=$(jq -r '.gh.prClose.contribBranch // empty' <<<"$transfer_json")
@@ -1312,6 +1614,49 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +          permission-contents: write
 +          permission-workflows: write
 +
++      - name: Read upstream and contrib from the queue
++        id: queue
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++        run: |
++          set -euo pipefail
++          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
++          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
++          parse_owner_repo() {
++            local url=$1 owner repo
++            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
++              owner=${BASH_REMATCH[1]}
++              repo=${BASH_REMATCH[2]}
++              repo=${repo%.git}
++              repo=${repo%/}
++              printf '%s\n%s\n' "$owner" "$repo"
++              return 0
++            fi
++            echo "Could not parse GitHub owner/repo from queue URL" >&2
++            return 1
++          }
++          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
++          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
++          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
++            echo "queue.json is missing upstreamUrl or contribUrl" >&2
++            exit 1
++          fi
++          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
++          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
++          same_owner=false
++          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
++          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
++          if [ "$upstream_lc" = "$contrib_lc" ]; then
++            same_owner=true
++          fi
++          {
++            echo "upstream_owner=${upstream[0]}"
++            echo "upstream_repo=${upstream[1]}"
++            echo "contrib_owner=${contrib[0]}"
++            echo "contrib_repo=${contrib[1]}"
++            echo "same_owner=${same_owner}"
++          } >> "$GITHUB_OUTPUT"
++
 +      - name: Mint upstream GitHub App token
 +        id: upstream-app
 +        if: ${{ vars.UPLINK_UPSTREAM_AUTH == 'app' }}
@@ -1319,8 +1664,8 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +        with:
 +          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
 +          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
-+          owner: ${{ secrets.UPLINK_UPSTREAM_OWNER }}
-+          repositories: ${{ secrets.UPLINK_UPSTREAM_REPO }}
++          owner: ${{ steps.queue.outputs.upstream_owner }}
++          repositories: ${{ steps.queue.outputs.upstream_repo }}
 +          permission-contents: read
 +
 +      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1348,8 +1693,6 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +          BASE_REF: ${{ github.event.pull_request.base.ref }}
 +        run: |
 +          git uplink init
-+          git fetch origin main
-+          git branch -f main origin/main
 +          if [[ "$BASE_REF" == uplink/transfer-to-upstream/* ]]; then
 +            id="${BASE_REF#uplink/transfer-to-upstream/}"
 +            direction=to-upstream
@@ -1377,7 +1720,7 @@ index 0000000000000000000000000000000000000000..e9182e3fe18f67aebef1c4702fa1c506
 +          git push origin uplink/state
 +          main_after=$(git rev-parse HEAD)
 +          if [ "$main_after" != "$main_before" ]; then
-+            git push origin main --force-with-lease
++            git push origin main --force
 +          fi
 +          close_url=$(jq -r '.gh.prClose.url // empty' <<<"$transfer_json")
 +          close_branch=$(jq -r '.gh.prClose.contribBranch // empty' <<<"$transfer_json")
