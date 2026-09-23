@@ -252,10 +252,10 @@
       "id": "upl_be6999b9ac",
       "title": "Wire hash into a describe helper",
       "commitMessage": "Wire hash into a describe helper\n\nExpose a describeToken helper that reports TTL and the current hash so callers can wire both APIs together.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-3001\r\nUplink-Export-Author: Cam <cam@example.com>",
-      "status": "approved",
+      "status": "submitted",
       "dependsOn": [],
       "createdAt": "2026-09-23T21:55:34.335Z",
-      "updatedAt": "2026-09-23T22:15:59.427Z",
+      "updatedAt": "2026-09-23T22:16:04.110Z",
       "patchIdStable": "c97c1b0f2892e114df924888368e00b6c3c36600",
       "source": {
         "internalPrNumber": 14,
@@ -295,6 +295,12 @@
           }
         ]
       },
+      "upstream": {
+        "contribBranch": "uplink/upl_be6999b9ac",
+        "prNumber": 6,
+        "prUrl": "https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/6",
+        "submittedAt": "2026-09-23T22:16:04.110Z"
+      },
       "approvals": [
         {
           "at": "2026-09-23T22:15:59.427Z",
@@ -315,6 +321,11 @@
           "at": "2026-09-23T22:15:59.427Z",
           "type": "approved",
           "detail": "IP and contribution review passed; patch may leave the enterprise"
+        },
+        {
+          "at": "2026-09-23T22:16:04.110Z",
+          "type": "submitted",
+          "detail": "Upstream PR https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/6"
         }
       ]
     }
