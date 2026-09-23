@@ -1,0 +1,32 @@
+From 9434f684584db48011bc2b5fcddb16218003640a Mon Sep 17 00:00:00 2001
+From: Uplink Bot <uplink@company.example>
+Date: Wed, 23 Sep 2026 21:55:34 +0000
+Subject: [PATCH] Wire hash into a describe helper
+
+Expose a describeToken helper that reports TTL and the current hash so callers can wire both APIs together.
+
+----- Uplink: internal below this line -----
+
+Ticket: PROJ-3001
+Uplink-Export-Author: Cam <cam@example.com>
+
+Uplink-Patch-Id: upl_be6999b9ac
+---
+ src/tokens.js | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/tokens.js b/src/tokens.js
+index 96232a19e7ba3bde3b3c68d8741e148a0ad0041e..d85c7fa6fd236b5915b9ac26fd44b77e6f8940b8 100644
+--- a/src/tokens.js
++++ b/src/tokens.js
+@@ -15,3 +15,7 @@ export function hash(value) {
+ export function ttl() {
+   return 3600;
+ }
++
++export function describeToken(value) {
++  return `ttl=${ttl()} hash=${hash(value)}`;
++}
+\ No newline at end of file
+-- 
+2.55.0

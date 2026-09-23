@@ -195,6 +195,61 @@
           "detail": "Internally approved via PR #13; imported as upstream"
         }
       ]
+    },
+    {
+      "id": "upl_be6999b9ac",
+      "title": "Wire hash into a describe helper",
+      "commitMessage": "Wire hash into a describe helper\n\nExpose a describeToken helper that reports TTL and the current hash so callers can wire both APIs together.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-3001\r\nUplink-Export-Author: Cam <cam@example.com>",
+      "status": "queued",
+      "dependsOn": [],
+      "createdAt": "2026-09-23T21:55:34.335Z",
+      "updatedAt": "2026-09-23T21:55:34.336Z",
+      "patchIdStable": "c97c1b0f2892e114df924888368e00b6c3c36600",
+      "source": {
+        "internalPrNumber": 14,
+        "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/14"
+      },
+      "assess": {
+        "at": "2026-09-23T21:55:34.349Z",
+        "ok": true,
+        "commitMessage": "Wire hash into a describe helper\n\nExpose a describeToken helper that reports TTL and the current hash so callers can wire both APIs together.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-3001\r\nUplink-Export-Author: Cam <cam@example.com>",
+        "publicSubject": "Wire hash into a describe helper",
+        "publicBody": "Expose a describeToken helper that reports TTL and the current hash so callers can wire both APIs together.",
+        "authorName": "Cam",
+        "authorEmail": "cam@example.com",
+        "originalAuthor": "Nils Petzall",
+        "originalEmail": "nils.petzall@gmail.com",
+        "cutoffFound": true,
+        "checks": [
+          {
+            "id": "message-scrubbed",
+            "status": "pass",
+            "detail": "Internal section removed. Public body is what upstream will see."
+          },
+          {
+            "id": "cutoff-used",
+            "status": "pass",
+            "detail": "Cutoff “----- Uplink: internal below this line -----” found."
+          },
+          {
+            "id": "author-rewrite",
+            "status": "pass",
+            "detail": "Export author Cam <cam@example.com> (was Nils Petzall <nils.petzall@gmail.com>). Company main still records the Uplink bot."
+          },
+          {
+            "id": "affiliation-leak",
+            "status": "warn",
+            "detail": "No redactKeywords / internalEmailDomains configured. Set them (or UPLINK_REDACT_KEYWORDS) so tests cannot mention the company."
+          }
+        ]
+      },
+      "events": [
+        {
+          "at": "2026-09-23T21:55:34.336Z",
+          "type": "created",
+          "detail": "Internally approved via PR #14; imported as upstream"
+        }
+      ]
     }
   ],
   "internal": []
