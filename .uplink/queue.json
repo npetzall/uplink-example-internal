@@ -171,10 +171,10 @@
       "id": "upl_3e9e4dd7f3",
       "title": "Extend TTL",
       "commitMessage": "Extend TTL\n\nExtend the default token TTL from one hour to two.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-2001\r\nUplink-Export-Author: Ben <ben@example.com>",
-      "status": "queued",
+      "status": "submitted",
       "dependsOn": [],
       "createdAt": "2026-09-23T21:39:19.065Z",
-      "updatedAt": "2026-09-23T21:39:19.065Z",
+      "updatedAt": "2026-09-23T22:15:52.550Z",
       "patchIdStable": "db98b943ac3c3f1cf03d403e8de839f685b02e89",
       "source": {
         "internalPrNumber": 13,
@@ -214,11 +214,37 @@
           }
         ]
       },
+      "upstream": {
+        "contribBranch": "uplink/upl_3e9e4dd7f3",
+        "prNumber": 5,
+        "prUrl": "https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/5",
+        "submittedAt": "2026-09-23T22:15:51.613Z"
+      },
+      "approvals": [
+        {
+          "at": "2026-09-23T22:15:47.512Z",
+          "version": 1,
+          "kind": "initial",
+          "sha": "30e66b868eb468c0c8a50690c355cbed4ae5c5ad",
+          "patchIdStable": "db98b943ac3c3f1cf03d403e8de839f685b02e89",
+          "runUrl": "https://github.com/npetzall/uplink-example-internal/actions/runs/35925775734"
+        }
+      ],
       "events": [
         {
           "at": "2026-09-23T21:39:19.065Z",
           "type": "created",
           "detail": "Internally approved via PR #13; imported as upstream"
+        },
+        {
+          "at": "2026-09-23T22:15:47.512Z",
+          "type": "approved",
+          "detail": "IP and contribution review passed; patch may leave the enterprise"
+        },
+        {
+          "at": "2026-09-23T22:15:51.613Z",
+          "type": "submitted",
+          "detail": "Upstream PR https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/5"
         }
       ]
     },
