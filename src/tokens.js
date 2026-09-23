@@ -15,3 +15,7 @@ export function hash(value) {
 export function ttl() {
   return 3600;
 }
+
+export function describeToken(value) {
+  return `ttl=${ttl()} hash=${hash(value)}`;
+}
