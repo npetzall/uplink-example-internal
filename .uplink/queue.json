@@ -85,6 +85,62 @@
     ],
     "kind": "uplink-tooling"
   },
-  "upstream": [],
+  "upstream": [
+    {
+      "id": "upl_514cec0ee6",
+      "title": "Use SHA-256 for tokens",
+      "commitMessage": "Use SHA-256 for tokens\n\nReplace SHA-1 in the default hasher with SHA-256.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-1234",
+      "status": "queued",
+      "dependsOn": [],
+      "createdAt": "2026-09-23T21:37:46.746Z",
+      "updatedAt": "2026-09-23T21:37:46.746Z",
+      "patchIdStable": "e8fbb10102ef0e41b7bfa7c2b6833938c07d10e8",
+      "source": {
+        "internalPrNumber": 12,
+        "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/12"
+      },
+      "assess": {
+        "at": "2026-09-23T21:37:46.759Z",
+        "ok": true,
+        "commitMessage": "Use SHA-256 for tokens\n\nReplace SHA-1 in the default hasher with SHA-256.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-1234",
+        "publicSubject": "Use SHA-256 for tokens",
+        "publicBody": "Replace SHA-1 in the default hasher with SHA-256.",
+        "authorName": "Uplink Contributor",
+        "authorEmail": "uplink@users.noreply.github.com",
+        "originalAuthor": "Nils Petzall",
+        "originalEmail": "nils.petzall@gmail.com",
+        "cutoffFound": true,
+        "checks": [
+          {
+            "id": "message-scrubbed",
+            "status": "pass",
+            "detail": "Internal section removed. Public body is what upstream will see."
+          },
+          {
+            "id": "cutoff-used",
+            "status": "pass",
+            "detail": "Cutoff “----- Uplink: internal below this line -----” found."
+          },
+          {
+            "id": "author-rewrite",
+            "status": "pass",
+            "detail": "Export author Uplink Contributor <uplink@users.noreply.github.com> (was Nils Petzall <nils.petzall@gmail.com>). Company main still records the Uplink bot."
+          },
+          {
+            "id": "affiliation-leak",
+            "status": "warn",
+            "detail": "No redactKeywords / internalEmailDomains configured. Set them (or UPLINK_REDACT_KEYWORDS) so tests cannot mention the company."
+          }
+        ]
+      },
+      "events": [
+        {
+          "at": "2026-09-23T21:37:46.746Z",
+          "type": "created",
+          "detail": "Internally approved via PR #12; imported as upstream"
+        }
+      ]
+    }
+  ],
   "internal": []
 }
