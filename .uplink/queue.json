@@ -140,6 +140,61 @@
           "detail": "Internally approved via PR #12; imported as upstream"
         }
       ]
+    },
+    {
+      "id": "upl_3e9e4dd7f3",
+      "title": "Extend TTL",
+      "commitMessage": "Extend TTL\n\nExtend the default token TTL from one hour to two.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-2001\r\nUplink-Export-Author: Ben <ben@example.com>",
+      "status": "queued",
+      "dependsOn": [],
+      "createdAt": "2026-09-23T21:39:19.065Z",
+      "updatedAt": "2026-09-23T21:39:19.065Z",
+      "patchIdStable": "db98b943ac3c3f1cf03d403e8de839f685b02e89",
+      "source": {
+        "internalPrNumber": 13,
+        "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/13"
+      },
+      "assess": {
+        "at": "2026-09-23T21:39:19.078Z",
+        "ok": true,
+        "commitMessage": "Extend TTL\n\nExtend the default token TTL from one hour to two.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-2001\r\nUplink-Export-Author: Ben <ben@example.com>",
+        "publicSubject": "Extend TTL",
+        "publicBody": "Extend the default token TTL from one hour to two.",
+        "authorName": "Ben",
+        "authorEmail": "ben@example.com",
+        "originalAuthor": "Nils Petzall",
+        "originalEmail": "nils.petzall@gmail.com",
+        "cutoffFound": true,
+        "checks": [
+          {
+            "id": "message-scrubbed",
+            "status": "pass",
+            "detail": "Internal section removed. Public body is what upstream will see."
+          },
+          {
+            "id": "cutoff-used",
+            "status": "pass",
+            "detail": "Cutoff “----- Uplink: internal below this line -----” found."
+          },
+          {
+            "id": "author-rewrite",
+            "status": "pass",
+            "detail": "Export author Ben <ben@example.com> (was Nils Petzall <nils.petzall@gmail.com>). Company main still records the Uplink bot."
+          },
+          {
+            "id": "affiliation-leak",
+            "status": "warn",
+            "detail": "No redactKeywords / internalEmailDomains configured. Set them (or UPLINK_REDACT_KEYWORDS) so tests cannot mention the company."
+          }
+        ]
+      },
+      "events": [
+        {
+          "at": "2026-09-23T21:39:19.065Z",
+          "type": "created",
+          "detail": "Internally approved via PR #13; imported as upstream"
+        }
+      ]
     }
   ],
   "internal": []
