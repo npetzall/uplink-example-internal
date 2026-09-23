@@ -90,10 +90,10 @@
       "id": "upl_514cec0ee6",
       "title": "Use SHA-256 for tokens",
       "commitMessage": "Use SHA-256 for tokens\n\nReplace SHA-1 in the default hasher with SHA-256.\r\n\r\n----- Uplink: internal below this line -----\r\n\r\nTicket: PROJ-1234",
-      "status": "approved",
+      "status": "submitted",
       "dependsOn": [],
       "createdAt": "2026-09-23T21:37:46.746Z",
-      "updatedAt": "2026-09-23T22:15:41.969Z",
+      "updatedAt": "2026-09-23T22:15:45.946Z",
       "patchIdStable": "e8fbb10102ef0e41b7bfa7c2b6833938c07d10e8",
       "source": {
         "internalPrNumber": 12,
@@ -133,6 +133,12 @@
           }
         ]
       },
+      "upstream": {
+        "contribBranch": "uplink/upl_514cec0ee6",
+        "prNumber": 4,
+        "prUrl": "https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/4",
+        "submittedAt": "2026-09-23T22:15:45.946Z"
+      },
       "approvals": [
         {
           "at": "2026-09-23T22:15:41.969Z",
@@ -153,6 +159,11 @@
           "at": "2026-09-23T22:15:41.969Z",
           "type": "approved",
           "detail": "IP and contribution review passed; patch may leave the enterprise"
+        },
+        {
+          "at": "2026-09-23T22:15:45.946Z",
+          "type": "submitted",
+          "detail": "Upstream PR https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/4"
         }
       ]
     },
