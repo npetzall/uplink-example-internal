@@ -1,6 +1,6 @@
-From 34eeb5c57750b197198c3d5cd4fc43846859d883 Mon Sep 17 00:00:00 2001
+From 551bd15e42955d9cda835a968d15c18ae457c644 Mon Sep 17 00:00:00 2001
 From: Uplink Bot <uplink@company.example>
-Date: Wed, 23 Sep 2026 21:39:19 +0000
+Date: Fri, 25 Sep 2026 08:36:02 +0000
 Subject: [PATCH] Extend TTL
 
 Extend the default token TTL from one hour to two.
@@ -16,15 +16,17 @@ Uplink-Patch-Id: upl_3e9e4dd7f3
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/tokens.js b/src/tokens.js
-index 96232a19e7ba3bde3b3c68d8741e148a0ad0041e..42bf84ae5b691a344f25fc6b6e976c90490fe46c 100644
+index c8de444617d9b9da253fde06b1f5cc9e80c8fbb5..2ff0a77b11697f1fe6eb9b9855647e0835e4491d 100644
 --- a/src/tokens.js
 +++ b/src/tokens.js
-@@ -13,5 +13,5 @@ export function hash(value) {
+@@ -13,7 +13,7 @@ export function hash(value) {
  }
  
  export function ttl() {
 -  return 3600;
 +  return 7200;
  }
+ 
+ export function describeToken(value) {
 -- 
 2.55.0
