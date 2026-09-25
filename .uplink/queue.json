@@ -15,10 +15,10 @@
     "forge": "example-github"
   },
   "lastSync": {
-    "at": "2026-09-25T08:36:02.540Z",
+    "at": "2026-09-25T08:36:02.560Z",
     "upstreamSha": "6c389e809e4f2387d4c7f4ff79d2cdac8144da1c",
     "result": "ok",
-    "message": "Rebuild completed"
+    "message": "Dropped merged patches: upl_be6999b9ac"
   },
   "tooling": {
     "id": "upl_00a3ebfdef",
