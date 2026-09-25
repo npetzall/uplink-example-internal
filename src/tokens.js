@@ -9,7 +9,7 @@ function sha256(value) {
 }
 
 export function hash(value) {
-  return sha1(value);
+  return sha256(value);
 }
 
 export function ttl() {
