@@ -1,0 +1,565 @@
+# GitHub forge pack (`git uplink init --forge github`).
+# Installs git-uplink from a GitHub release.
+# Empty UPLINK_*_AUTH defaults to app.
+#
+# Inspect fetches public upstream without moving uplink/upstream. A patch is
+# merged when a commit has its stable patch id, or when its recorded public
+# pull request is merged (looked up here and passed as --merged-pr). When the
+# merged patches explain the whole range, sync applies it immediately.
+# Otherwise the remaining diff goes to
+# .uplink/reports/from-upstream/incoming.md and waits on Environment
+# `from-upstream`. After approval, accept-upstream promotes uplink/upstream,
+# marks those patches merged, and rebuilds company main. It refuses a pending
+# upstream other than the reviewed one. Queue history lives on uplink/state
+# (FF-only).
+#
+# An approved upstream brings changes that are not ours, so preflight.sh
+# runs on it first, in a job without write credentials. If it fails, nothing
+# is promoted and the run fails. If it passes and the rebuilt tree fails,
+# git bisect finds the first patch the script fails on. An upstream that
+# moved only by our own merged patches was tested as patches: it is applied
+# without running the script.
+#
+# On apply failure, or for the patch preflight.sh fails on, it records the
+# patch as conflict on uplink/state, pushes uplink/conflict/<id> (protected
+# base) and <id>-work, and opens a gated PR. Do not push the protected base
+# directly.
+#
+# With repository variable UPLINK_AUTO_SUBMIT set to `true`, a queued patch
+# whose last unmerged upstream dependency this run marked merged gets Uplink
+# submit dispatched, also when the run ends in a conflict on another patch.
+#
+# Dispatch only. uplink-sync-schedule.yml runs it hourly.
+name: Uplink sync
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: uplink-sync
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  inspect:
+    name: Inspect upstream
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+    concurrency:
+      group: uplink-mutate
+      queue: max
+    outputs:
+      needs_approval: ${{ steps.sync.outputs.needs_approval }}
+      pending_sha: ${{ steps.sync.outputs.pending_sha }}
+    steps:
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          repo: ${{ vars.UPLINK_SRC }}
+          version: ${{ vars.UPLINK_VERSION }}
+          signer: ${{ vars.UPLINK_SIGNER }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mint internal GitHub App token
+        id: internal-app
+        if: ${{ vars.UPLINK_INTERNAL_AUTH != 'pat' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.UPLINK_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.UPLINK_INTERNAL_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-workflows: write
+          permission-pull-requests: write
+
+      - name: Read upstream and contrib from the queue
+        id: queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
+          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
+          parse_owner_repo() {
+            local url=$1 owner repo
+            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
+              owner=${BASH_REMATCH[1]}
+              repo=${BASH_REMATCH[2]}
+              repo=${repo%.git}
+              repo=${repo%/}
+              printf '%s\n%s\n' "$owner" "$repo"
+              return 0
+            fi
+            echo "Could not parse GitHub owner/repo from queue URL" >&2
+            return 1
+          }
+          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
+          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
+          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
+            echo "queue.json is missing upstreamUrl or contribUrl" >&2
+            exit 1
+          fi
+          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
+          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
+          same_owner=false
+          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
+          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
+          if [ "$upstream_lc" = "$contrib_lc" ]; then
+            same_owner=true
+          fi
+          {
+            echo "upstream_owner=${upstream[0]}"
+            echo "upstream_repo=${upstream[1]}"
+            echo "contrib_owner=${contrib[0]}"
+            echo "contrib_repo=${contrib[1]}"
+            echo "same_owner=${same_owner}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint upstream GitHub App token
+        id: upstream-app
+        if: ${{ vars.UPLINK_UPSTREAM_AUTH != 'pat' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
+          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
+          owner: ${{ steps.queue.outputs.upstream_owner }}
+          repositories: ${{ steps.queue.outputs.upstream_repo }}
+          permission-contents: read
+          permission-pull-requests: read
+
+      # Proof that a patch merged: the public PR recorded on the queue is
+      # merged. Sync checks the merge commit against the range it fetches.
+      # The upstream repository comes from the queue config and the PR by
+      # number, not from the stored PR URL.
+      - name: Find merged public pull requests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
+          UPSTREAM_REPO: ${{ steps.queue.outputs.upstream_owner }}/${{ steps.queue.outputs.upstream_repo }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/uplink-merged-prs"
+          : > "$out"
+          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
+          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
+          open=$(jq -r '
+            .upstream[]?
+            | select(.status != "merged" and .status != "dropped")
+            | select(.upstream.prNumber != null)
+            | "\(.id) \(.upstream.prNumber)"
+          ' <<<"$queue")
+          while read -r id number; do
+            [ -n "$id" ] || continue
+            if ! sha=$(GH_TOKEN="$UPSTREAM_TOKEN" gh api "repos/${UPSTREAM_REPO}/pulls/${number}" \
+              --jq 'select(.merged) | .merge_commit_sha // empty' 2>&1); then
+              echo "::warning title=Uplink sync::could not read public PR #${number} for ${id}: ${sha}"
+              continue
+            fi
+            if [[ "$sha" =~ ^[0-9a-f]{40,64}$ ]]; then
+              printf '%s=%s\n' "$id" "$sha" >> "$out"
+              echo "${id}: public PR #${number} merged at ${sha}"
+            fi
+          done <<<"$open"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
+
+      - name: Sync with upstream
+        id: sync
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
+          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
+        run: |
+          git uplink init
+          main_before=$(git rev-parse HEAD)
+
+          merged=()
+          while IFS= read -r item; do
+            if [ -n "$item" ]; then merged+=(--merged-pr "$item"); fi
+          done < "$RUNNER_TEMP/uplink-merged-prs"
+          sync_json=$(git uplink sync "${merged[@]}")
+
+          needs_approval=$(jq -r '.needsApproval // false' <<<"$sync_json")
+          echo "needs_approval=${needs_approval}" >> "$GITHUB_OUTPUT"
+          echo "pending_sha=$(jq -r '.pendingSha // empty' <<<"$sync_json")" >> "$GITHUB_OUTPUT"
+          summary=$(jq -r '.summary // empty' <<<"$sync_json")
+          if [ -n "$summary" ]; then
+            printf '%s\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          git push origin uplink/state
+          echo "ready_to_submit=$(jq -c '.readyToSubmit // []' <<<"$sync_json")" >> "$GITHUB_OUTPUT"
+          if [ "$needs_approval" = "true" ]; then
+            exit 0
+          fi
+
+          git push origin uplink/upstream --force || true
+
+          main_after=$(git rev-parse HEAD)
+          if [ "$main_after" != "$main_before" ]; then
+            git push origin HEAD:main --force
+          fi
+
+          if jq -e '.conflict != null' <<<"$sync_json" >/dev/null; then
+            conflict_id=$(jq -r '.conflict.id // empty' <<<"$sync_json")
+            conflict_branch=$(jq -r '.conflict.branch // empty' <<<"$sync_json")
+            work_branch=$(jq -r '.conflict.workBranch // empty' <<<"$sync_json")
+            if [ -z "$conflict_id" ] || [ "$conflict_id" = "null" ]; then
+              echo "sync recorded a conflict but no conflict patch id was present"
+              exit 1
+            fi
+            if git show-ref --verify --quiet "refs/heads/${conflict_branch}"; then
+              git push origin "refs/heads/${conflict_branch}:refs/heads/${conflict_branch}" --force
+            fi
+            if [ -n "$work_branch" ] && git show-ref --verify --quiet "refs/heads/${work_branch}"; then
+              git push origin "refs/heads/${work_branch}:refs/heads/${work_branch}" --force
+            fi
+
+            title=$(jq -r '.gh.prCreate.title' <<<"$sync_json")
+            body_file=$(jq -r '.gh.prCreate.bodyFile' <<<"$sync_json")
+            head=$(jq -r '.gh.prCreate.head' <<<"$sync_json")
+            base=$(jq -r '.gh.prCreate.base' <<<"$sync_json")
+            existing=$(gh pr list --head "$head" --base "$base" --state open --json url --jq '.[0].url')
+            if [ -z "$existing" ]; then
+              gh label create uplink:conflict --description "Uplink sync conflict; resolve via the gated work PR" --color B60205 || true
+              # The internal bot opens the PR: GITHUB_TOKEN may not create PRs, and a
+              # bot-opened PR triggers the Uplink gate check. The Actions token labels it.
+              url=$(GH_TOKEN="$UPLINK_INTERNAL_TOKEN" gh pr create --title "$title" --base "$base" --head "$head" --body-file "$body_file")
+              gh pr edit "$url" --add-label uplink:conflict
+            else
+              url="$existing"
+            fi
+            git uplink gated "$conflict_id" --pr-url "$url"
+          fi
+
+      - name: Dispatch Uplink submit for patches that became ready
+        if: ${{ vars.UPLINK_AUTO_SUBMIT == 'true' && steps.sync.outputs.ready_to_submit != '' && steps.sync.outputs.ready_to_submit != '[]' }}
+        uses: $/.github/actions/uplink-dispatch-submit
+        with:
+          patch-ids: ${{ steps.sync.outputs.ready_to_submit }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # A rebuild writes every commit of main again. Tell the open pull
+      # requests it left behind how to rebase; a failure here is not a
+      # failure of the job.
+      - name: Tell open pull requests about a rebuilt main
+        continue-on-error: true
+        uses: $/.github/actions/uplink-rebase-comment
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          auto-rebase: ${{ vars.UPLINK_AUTO_REBASE }}
+
+  # Environment Waiting occupies a concurrency group. Keep the long
+  # from-upstream review off uplink-mutate; apply takes the group after approval.
+  wait-from-upstream:
+    name: Wait for from-upstream approval
+    needs: inspect
+    if: needs.inspect.outputs.needs_approval == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+    environment:
+      name: from-upstream
+      url: ${{ github.server_url }}/${{ github.repository }}/blob/uplink/state/.uplink/reports/from-upstream/incoming.md
+    steps:
+      - name: from-upstream approved
+        run: echo "from-upstream approved for ${{ github.repository }}"
+
+  # preflight.sh builds and runs product code (the approved upstream's
+  # included), so it runs in this job: read-only token, no internal App
+  # token, no Environment, no credentials in the checkout. The upstream
+  # token only fetches the approved upstream, in its own step. The job that
+  # holds the write tokens takes the result and never runs the script.
+  accept-preflight:
+    name: Preflight the approved upstream (no credentials)
+    needs: [inspect, wait-from-upstream]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      report: ${{ steps.run.outputs.report }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: main
+
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          repo: ${{ vars.UPLINK_SRC }}
+          version: ${{ vars.UPLINK_VERSION }}
+          signer: ${{ vars.UPLINK_SIGNER }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read upstream and contrib from the queue
+        id: queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
+          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
+          parse_owner_repo() {
+            local url=$1 owner repo
+            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
+              owner=${BASH_REMATCH[1]}
+              repo=${BASH_REMATCH[2]}
+              repo=${repo%.git}
+              repo=${repo%/}
+              printf '%s\n%s\n' "$owner" "$repo"
+              return 0
+            fi
+            echo "Could not parse GitHub owner/repo from queue URL" >&2
+            return 1
+          }
+          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
+          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
+          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
+            echo "queue.json is missing upstreamUrl or contribUrl" >&2
+            exit 1
+          fi
+          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
+          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
+          same_owner=false
+          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
+          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
+          if [ "$upstream_lc" = "$contrib_lc" ]; then
+            same_owner=true
+          fi
+          {
+            echo "upstream_owner=${upstream[0]}"
+            echo "upstream_repo=${upstream[1]}"
+            echo "contrib_owner=${contrib[0]}"
+            echo "contrib_repo=${contrib[1]}"
+            echo "same_owner=${same_owner}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint upstream GitHub App token
+        id: upstream-app
+        if: ${{ vars.UPLINK_UPSTREAM_AUTH != 'pat' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
+          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
+          owner: ${{ steps.queue.outputs.upstream_owner }}
+          repositories: ${{ steps.queue.outputs.upstream_repo }}
+          permission-contents: read
+
+      - name: Fetch what preflight reads
+        env:
+          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
+          PENDING_SHA: ${{ needs.inspect.outputs.pending_sha }}
+        run: |
+          set -euo pipefail
+          git uplink init
+          git uplink accept-upstream --fetch-only --sha "$PENDING_SHA"
+
+      - name: Run company toolchain hook
+        uses: $/.github/actions/uplink-toolchain-hook
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # No token in this step: git uplink refuses to run preflight.sh in a
+      # CI job step that holds one. When the script fails on the rebuilt
+      # tree, git bisect runs it here too, to find the patch.
+      - name: Run preflight.sh
+        id: run
+        env:
+          PENDING_SHA: ${{ needs.inspect.outputs.pending_sha }}
+        run: |
+          report=$(git uplink accept-upstream --sha "$PENDING_SHA" --preflight-only) || true
+          if ! jq -e . >/dev/null 2>&1 <<<"$report"; then
+            echo "git uplink printed no preflight result"
+            exit 1
+          fi
+          echo "report=$(jq -c . <<<"$report")" >> "$GITHUB_OUTPUT"
+
+  apply:
+    name: Apply accepted upstream
+    needs: [inspect, wait-from-upstream, accept-preflight]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+    concurrency:
+      group: uplink-mutate
+      queue: max
+    steps:
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          repo: ${{ vars.UPLINK_SRC }}
+          version: ${{ vars.UPLINK_VERSION }}
+          signer: ${{ vars.UPLINK_SIGNER }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mint internal GitHub App token
+        id: internal-app
+        if: ${{ vars.UPLINK_INTERNAL_AUTH != 'pat' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.UPLINK_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.UPLINK_INTERNAL_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-workflows: write
+          permission-pull-requests: write
+
+      - name: Read upstream and contrib from the queue
+        id: queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          content=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.uplink/queue.json?ref=uplink%2Fstate" --jq .content)
+          queue=$(printf '%s' "$content" | tr -d '\n' | base64 -d)
+          parse_owner_repo() {
+            local url=$1 owner repo
+            if [[ "$url" =~ github.com[:/]([^/]+)/(.+)$ ]]; then
+              owner=${BASH_REMATCH[1]}
+              repo=${BASH_REMATCH[2]}
+              repo=${repo%.git}
+              repo=${repo%/}
+              printf '%s\n%s\n' "$owner" "$repo"
+              return 0
+            fi
+            echo "Could not parse GitHub owner/repo from queue URL" >&2
+            return 1
+          }
+          upstream_url=$(jq -r '.config.upstreamUrl // empty' <<<"$queue")
+          contrib_url=$(jq -r '.config.contribUrl // empty' <<<"$queue")
+          if [ -z "$upstream_url" ] || [ -z "$contrib_url" ]; then
+            echo "queue.json is missing upstreamUrl or contribUrl" >&2
+            exit 1
+          fi
+          mapfile -t upstream < <(parse_owner_repo "$upstream_url")
+          mapfile -t contrib < <(parse_owner_repo "$contrib_url")
+          same_owner=false
+          upstream_lc=$(printf '%s' "${upstream[0]}" | tr '[:upper:]' '[:lower:]')
+          contrib_lc=$(printf '%s' "${contrib[0]}" | tr '[:upper:]' '[:lower:]')
+          if [ "$upstream_lc" = "$contrib_lc" ]; then
+            same_owner=true
+          fi
+          {
+            echo "upstream_owner=${upstream[0]}"
+            echo "upstream_repo=${upstream[1]}"
+            echo "contrib_owner=${contrib[0]}"
+            echo "contrib_repo=${contrib[1]}"
+            echo "same_owner=${same_owner}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint upstream GitHub App token
+        id: upstream-app
+        if: ${{ vars.UPLINK_UPSTREAM_AUTH != 'pat' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.UPLINK_UPSTREAM_APP_ID }}
+          private-key: ${{ secrets.UPLINK_UPSTREAM_APP_PRIVATE_KEY }}
+          owner: ${{ steps.queue.outputs.upstream_owner }}
+          repositories: ${{ steps.queue.outputs.upstream_repo }}
+          permission-contents: read
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          ref: main
+          token: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
+
+      - name: Accept pending upstream
+        id: accept
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          UPLINK_INTERNAL_TOKEN: ${{ steps.internal-app.outputs.token || secrets.UPLINK_INTERNAL_TOKEN }}
+          UPLINK_UPSTREAM_TOKEN: ${{ steps.upstream-app.outputs.token || secrets.UPLINK_UPSTREAM_TOKEN }}
+          UPLINK_FROM_UPSTREAM_ENVIRONMENT: from-upstream
+          PENDING_SHA: ${{ needs.inspect.outputs.pending_sha }}
+          PREFLIGHT_REPORT: ${{ needs.accept-preflight.outputs.report }}
+        run: |
+          git uplink init
+          printf '%s' "$PREFLIGHT_REPORT" > "$RUNNER_TEMP/uplink-preflight.json"
+          main_before=$(git rev-parse HEAD)
+
+          # Only the pending upstream that was reviewed is accepted, and
+          # only when preflight.sh passed on it.
+          sync_json=$(git uplink accept-upstream --sha "$PENDING_SHA" \
+            --preflight-result "$RUNNER_TEMP/uplink-preflight.json")
+          summary=$(jq -r '.summary // empty' <<<"$sync_json")
+          if [ -n "$summary" ]; then
+            printf '%s\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          git push origin uplink/state
+          echo "ready_to_submit=$(jq -c '.readyToSubmit // []' <<<"$sync_json")" >> "$GITHUB_OUTPUT"
+          git push origin uplink/upstream --force || true
+
+          main_after=$(git rev-parse HEAD)
+          if [ "$main_after" != "$main_before" ]; then
+            git push origin HEAD:main --force
+          fi
+
+          if ! jq -e '.conflict != null' <<<"$sync_json" >/dev/null; then
+            exit 0
+          fi
+
+          conflict_id=$(jq -r '.conflict.id // empty' <<<"$sync_json")
+          conflict_branch=$(jq -r '.conflict.branch // empty' <<<"$sync_json")
+          work_branch=$(jq -r '.conflict.workBranch // empty' <<<"$sync_json")
+          if [ -z "$conflict_id" ] || [ "$conflict_id" = "null" ]; then
+            echo "accept-upstream recorded a conflict but no conflict patch id was present"
+            exit 1
+          fi
+          if git show-ref --verify --quiet "refs/heads/${conflict_branch}"; then
+            git push origin "refs/heads/${conflict_branch}:refs/heads/${conflict_branch}" --force
+          fi
+          if [ -n "$work_branch" ] && git show-ref --verify --quiet "refs/heads/${work_branch}"; then
+            git push origin "refs/heads/${work_branch}:refs/heads/${work_branch}" --force
+          fi
+
+          title=$(jq -r '.gh.prCreate.title' <<<"$sync_json")
+          body_file=$(jq -r '.gh.prCreate.bodyFile' <<<"$sync_json")
+          head=$(jq -r '.gh.prCreate.head' <<<"$sync_json")
+          base=$(jq -r '.gh.prCreate.base' <<<"$sync_json")
+          existing=$(gh pr list --head "$head" --base "$base" --state open --json url --jq '.[0].url')
+          if [ -z "$existing" ]; then
+            gh label create uplink:conflict --description "Uplink sync conflict; resolve via the gated work PR" --color B60205 || true
+            # The internal bot opens the PR: GITHUB_TOKEN may not create PRs, and a
+            # bot-opened PR triggers the Uplink gate check. The Actions token labels it.
+            url=$(GH_TOKEN="$UPLINK_INTERNAL_TOKEN" gh pr create --title "$title" --base "$base" --head "$head" --body-file "$body_file")
+            gh pr edit "$url" --add-label uplink:conflict
+          else
+            url="$existing"
+          fi
+          git uplink gated "$conflict_id" --pr-url "$url"
+
+      - name: Dispatch Uplink submit for patches that became ready
+        if: ${{ vars.UPLINK_AUTO_SUBMIT == 'true' && steps.accept.outputs.ready_to_submit != '' && steps.accept.outputs.ready_to_submit != '[]' }}
+        uses: $/.github/actions/uplink-dispatch-submit
+        with:
+          patch-ids: ${{ steps.accept.outputs.ready_to_submit }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # A rebuild writes every commit of main again. Tell the open pull
+      # requests it left behind how to rebase; a failure here is not a
+      # failure of the job.
+      - name: Tell open pull requests about a rebuilt main
+        continue-on-error: true
+        uses: $/.github/actions/uplink-rebase-comment
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          auto-rebase: ${{ vars.UPLINK_AUTO_REBASE }}
