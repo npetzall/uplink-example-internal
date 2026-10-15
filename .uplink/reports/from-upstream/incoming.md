@@ -4,8 +4,8 @@ Public main moved, and company patches do not explain all of it. Review the unac
 
 | Field | Value |
 | --- | --- |
-| Current `uplink/upstream` | `fba696eededc4cc12a30c35b2b27b5099acd30f2` |
-| Pending public main | `c93796dab791ad0b6b358d62915594da98344dd1` |
+| Current `uplink/upstream` | `c93796dab791ad0b6b358d62915594da98344dd1` |
+| Pending public main | `dda09849bf8488e990f9f747dc0dab3b2e6cb998` |
 | Commits | 1 |
 | Patches merged | 0 |
 | Unproven claims | 0 |
@@ -24,7 +24,7 @@ None.
 
 | Commit | Author | Subject | Classified |
 | --- | --- | --- | --- |
-| `c93796dab791ad0b6b358d62915594da98344dd1` | Nils Petzäll &lt;nils.petzall@gmail.com> | Change hashing function from sha1 to sha256 | foreign |
+| `dda09849bf8488e990f9f747dc0dab3b2e6cb998` | Nils Petzäll &lt;nils.petzall@gmail.com> | Change default TTL value from 3600 to 3000 | foreign |
 
 ## Unaccounted changes
 
@@ -37,23 +37,21 @@ The diff from `uplink/upstream` with the merged patches applied to pending publi
 
 ```
 diff --git a/src/tokens.js b/src/tokens.js
-index 96232a1..0c7da2d 100644
+index 0c7da2d..5d4e142 100644
 --- a/src/tokens.js
 +++ b/src/tokens.js
-@@ -9,7 +9,7 @@ function sha256(value) {
- }
- 
- export function hash(value) {
--  return sha1(value);
-+  return sha256(value);
+@@ -13,5 +13,5 @@ export function hash(value) {
  }
  
  export function ttl() {
+-  return 3600;
++  return 3000;
+ }
 ```
 
 ## What happens when you approve the from-upstream environment
 
 1. GitHub records the environment reviewer (audit log + Deployments).
 2. This workflow writes `.uplink/reports/from-upstream/approval.md` on `uplink/state`.
-3. `git uplink accept-upstream` moves `uplink/upstream` to `c93796dab791ad0b6b358d62915594da98344dd1` and rebuilds company main.
+3. `git uplink accept-upstream` moves `uplink/upstream` to `dda09849bf8488e990f9f747dc0dab3b2e6cb998` and rebuilds company main.
 4. The patches listed above are marked merged and are not applied again. Remaining patches replay onto the new upstream; one that applies empty is marked merged too.
