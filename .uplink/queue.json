@@ -100,23 +100,23 @@
       "id": "upl_e935794740",
       "title": "Update ttl function to return 7200 seconds",
       "commitMessage": "Update ttl function to return 7200 seconds\n\nIncrease the TTL since it was too short\n\n----- Uplink: internal below this line -----",
-      "status": "conflict",
+      "status": "amended",
       "dependsOn": [],
       "createdAt": "2026-10-15T11:42:51.178Z",
-      "updatedAt": "2026-10-15T11:48:19.199Z",
-      "patchIdStable": "db98b943ac3c3f1cf03d403e8de839f685b02e89",
+      "updatedAt": "2026-10-15T11:57:40.774Z",
+      "patchIdStable": "635d5f3d30f2b3cdb8a6642f9031ab5fc5b62475",
       "source": {
         "internalPrNumber": 15,
         "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/15"
       },
       "assess": {
-        "at": "2026-10-15T11:44:41.648Z",
+        "at": "2026-10-15T11:57:40.763Z",
         "ok": true,
         "commitMessage": "Update ttl function to return 7200 seconds\n\nIncrease the TTL since it was too short\n\n----- Uplink: internal below this line -----",
         "publicSubject": "Update ttl function to return 7200 seconds",
         "publicBody": "Increase the TTL since it was too short",
-        "originalAuthor": "Nils Petzäll",
-        "originalEmail": "nils.petzall@gmail.com",
+        "originalAuthor": "Uplink Bot",
+        "originalEmail": "uplink@company.example",
         "cutoffFound": true,
         "checks": [
           {
@@ -138,11 +138,6 @@
             "id": "affiliation-leak",
             "status": "pass",
             "detail": "No configured company keywords or internal email domains in the export surface."
-          },
-          {
-            "id": "dependencies",
-            "status": "skip",
-            "detail": "No Uplink-Depends-On."
           }
         ]
       },
@@ -151,15 +146,6 @@
         "prNumber": 7,
         "prUrl": "https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/7",
         "submittedAt": "2026-10-15T11:45:50.581Z"
-      },
-      "conflict": {
-        "branch": "uplink/conflict/upl_e935794740",
-        "workBranch": "uplink/conflict/upl_e935794740-work",
-        "files": [
-          "src/tokens.js"
-        ],
-        "message": "Patch upl_e935794740 (\"Update ttl function to return 7200 seconds\") does not apply onto the current upstream prefix.",
-        "onto": "32e7d5ae24b1d71e51711d904f8e06be966e8a02"
       },
       "approvals": [
         {
@@ -197,6 +183,11 @@
           "at": "2026-10-15T11:48:19.199Z",
           "type": "conflict",
           "detail": "src/tokens.js"
+        },
+        {
+          "at": "2026-10-15T11:57:40.774Z",
+          "type": "amended",
+          "detail": "Conflict resolved; patch refreshed and re-assessed"
         }
       ]
     }
