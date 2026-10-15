@@ -12,10 +12,18 @@
     "forge": "try-it-on-github"
   },
   "lastSync": {
-    "at": "2026-10-15T11:26:08.472Z",
+    "at": "2026-10-15T11:36:45.216Z",
     "upstreamSha": "fba696eededc4cc12a30c35b2b27b5099acd30f2",
-    "result": "ok",
-    "message": "Synced with upstream"
+    "result": "pending-approval",
+    "message": "Waiting for from-upstream approval of c93796dab791ad0b6b358d62915594da98344dd1"
+  },
+  "pendingUpstream": {
+    "sha": "c93796dab791ad0b6b358d62915594da98344dd1",
+    "fromSha": "fba696eededc4cc12a30c35b2b27b5099acd30f2",
+    "at": "2026-10-15T11:36:45.216Z",
+    "foreignCommits": [
+      "c93796dab791ad0b6b358d62915594da98344dd1"
+    ]
   },
   "tooling": {
     "id": "upl_00a3ebfdef",
