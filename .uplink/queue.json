@@ -103,14 +103,14 @@
       "status": "amended",
       "dependsOn": [],
       "createdAt": "2026-10-15T11:42:51.178Z",
-      "updatedAt": "2026-10-15T11:57:40.774Z",
+      "updatedAt": "2026-10-15T11:58:08.502Z",
       "patchIdStable": "635d5f3d30f2b3cdb8a6642f9031ab5fc5b62475",
       "source": {
         "internalPrNumber": 15,
         "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/15"
       },
       "assess": {
-        "at": "2026-10-15T11:57:40.763Z",
+        "at": "2026-10-15T11:57:54.476Z",
         "ok": true,
         "commitMessage": "Update ttl function to return 7200 seconds\n\nIncrease the TTL since it was too short\n\n----- Uplink: internal below this line -----",
         "publicSubject": "Update ttl function to return 7200 seconds",
@@ -138,6 +138,11 @@
             "id": "affiliation-leak",
             "status": "pass",
             "detail": "No configured company keywords or internal email domains in the export surface."
+          },
+          {
+            "id": "dependencies",
+            "status": "skip",
+            "detail": "No Uplink-Depends-On."
           }
         ]
       },
@@ -188,6 +193,11 @@
           "at": "2026-10-15T11:57:40.774Z",
           "type": "amended",
           "detail": "Conflict resolved; patch refreshed and re-assessed"
+        },
+        {
+          "at": "2026-10-15T11:58:08.502Z",
+          "type": "assessed",
+          "detail": "Assessed the patch for the contribution packet"
         }
       ]
     }
