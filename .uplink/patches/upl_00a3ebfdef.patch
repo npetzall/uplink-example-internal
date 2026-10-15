@@ -1,6 +1,6 @@
-From 962bd9d6c415bef811e9a7cdf43f63e1309c0ce1 Mon Sep 17 00:00:00 2001
+From 6efd93f02af1c7e58a9aa75122f6faab6fa7939b Mon Sep 17 00:00:00 2001
 From: Uplink Bot <uplink@company.example>
-Date: Thu, 15 Oct 2026 13:05:39 +0200
+Date: Thu, 15 Oct 2026 13:24:45 +0200
 Subject: [PATCH] Uplink tooling
 
 Workflows and the GitHub pull request template for this repository.
@@ -59,7 +59,7 @@ Uplink-Patch-Id: upl_00a3ebfdef
 
 diff --git a/.github/actions/install-git-uplink/action.yml b/.github/actions/install-git-uplink/action.yml
 new file mode 100644
-index 0000000000000000000000000000000000000000..a691efc47f04adbe77a0439baeafd8b32ce25eb8
+index 0000000000000000000000000000000000000000..32bfc31edd41e9fab46fa76d5d3dd41614ef8410
 --- /dev/null
 +++ b/.github/actions/install-git-uplink/action.yml
 @@ -0,0 +1,82 @@
@@ -97,7 +97,7 @@ index 0000000000000000000000000000000000000000..a691efc47f04adbe77a0439baeafd8b3
 +        set -euo pipefail
 +        REPO="${REPO:-npetzall/git-uplink}"
 +        # git uplink init writes its own version here.
-+        VERSION="${VERSION:-0.1.0}"
++        VERSION="${VERSION:-5.8.0}"
 +        SIGNER="${SIGNER:-https://github.com/npetzall/git-uplink/.github/workflows/release.yml@refs/heads/main}"
 +        if [[ "$VERSION" != "latest" ]]; then
 +          tag="$VERSION"
