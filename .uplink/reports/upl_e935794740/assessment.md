@@ -11,7 +11,7 @@ This contribution was **already IP-approved** and submitted. Review **only the d
 | Last approved at | 2026-10-15T11:45:45.144Z |
 | Last approved commit | `31ec13274f466b6b1d3e4b9b9b9743ec5bfc45ca` |
 | Last approval run | https://github.com/npetzall/uplink-example-internal/actions/runs/38729484103 |
-| Review token | `81bd2be59e34ffcf2309f61149e2b22d7ae51d85` |
+| Review token | `474f8b514f6a6db2ddc06168c0578b6bb9315dc0` |
 
 ## Delta since last approval
 
@@ -20,10 +20,10 @@ This contribution was **already IP-approved** and submitted. Review **only the d
 The lines the patch adds and removes, file by file, compared with what was last approved. The unchanged lines around them are not listed.
 
 ```
-diff --git a/tmp/uplink-delta-d42e1448-d7ec-47ed-bc4d-e89d901076e0/approved.txt b/tmp/uplink-delta-d42e1448-d7ec-47ed-bc4d-e89d901076e0/current.txt
+diff --git a/tmp/uplink-delta-89a5e2e8-a7d9-4e7c-80aa-ddebb8d62118/approved.txt b/tmp/uplink-delta-89a5e2e8-a7d9-4e7c-80aa-ddebb8d62118/current.txt
 index 40aa136..058fd71 100644
---- a/tmp/uplink-delta-d42e1448-d7ec-47ed-bc4d-e89d901076e0/approved.txt
-+++ b/tmp/uplink-delta-d42e1448-d7ec-47ed-bc4d-e89d901076e0/current.txt
+--- a/tmp/uplink-delta-89a5e2e8-a7d9-4e7c-80aa-ddebb8d62118/approved.txt
++++ b/tmp/uplink-delta-89a5e2e8-a7d9-4e7c-80aa-ddebb8d62118/current.txt
 @@ -1,3 +1,5 @@
  diff --git a/src/tokens.js b/src/tokens.js
 --  return 3600;
@@ -39,20 +39,22 @@ The previously approved patch no longer applies cleanly on the current export ba
 ### Patch-file diff
 
 ```
-diff --git a/tmp/uplink-delta-231df364-e91f-4381-ba14-8f4eccf59e39/approved.patch b/tmp/uplink-delta-231df364-e91f-4381-ba14-8f4eccf59e39/current.patch
-index 6e7b434..bcc900c 100644
---- a/tmp/uplink-delta-231df364-e91f-4381-ba14-8f4eccf59e39/approved.patch
-+++ b/tmp/uplink-delta-231df364-e91f-4381-ba14-8f4eccf59e39/current.patch
-@@ -1,6 +1,6 @@
+diff --git a/tmp/uplink-delta-0c9bbde7-a511-4810-bfe5-1529dcd0656e/approved.patch b/tmp/uplink-delta-0c9bbde7-a511-4810-bfe5-1529dcd0656e/current.patch
+index 6e7b434..0241662 100644
+--- a/tmp/uplink-delta-0c9bbde7-a511-4810-bfe5-1529dcd0656e/approved.patch
++++ b/tmp/uplink-delta-0c9bbde7-a511-4810-bfe5-1529dcd0656e/current.patch
+@@ -1,27 +1,30 @@
 -From 1e47b3ae225aa1ca5423a8cd50aed476dad55aaa Mon Sep 17 00:00:00 2001
-+From 90d5a622e477d964b0dcdebc42c8d216232e9abc Mon Sep 17 00:00:00 2001
++From eda7ca195b151ad619dda2222276e1aab517027a Mon Sep 17 00:00:00 2001
  From: Uplink Bot <uplink@company.example>
 -Date: Thu, 15 Oct 2026 11:42:51 +0000
-+Date: Thu, 15 Oct 2026 11:57:40 +0000
++Date: Thu, 15 Oct 2026 12:01:54 +0000
  Subject: [PATCH] Update ttl function to return 7200 seconds
  
- Increase the TTL since it was too short
-@@ -9,19 +9,22 @@ Increase the TTL since it was too short
+-Increase the TTL since it was too short
++Remove unused sha function
+ 
+ ----- Uplink: internal below this line -----
  
  Uplink-Patch-Id: upl_e935794740
  ---
@@ -90,12 +92,12 @@ index 6e7b434..bcc900c 100644
 ### Current patch (will be exported)
 
 ```
-From 90d5a622e477d964b0dcdebc42c8d216232e9abc Mon Sep 17 00:00:00 2001
+From eda7ca195b151ad619dda2222276e1aab517027a Mon Sep 17 00:00:00 2001
 From: Uplink Bot <uplink@company.example>
-Date: Thu, 15 Oct 2026 11:57:40 +0000
+Date: Thu, 15 Oct 2026 12:01:54 +0000
 Subject: [PATCH] Update ttl function to return 7200 seconds
 
-Increase the TTL since it was too short
+Remove unused sha function
 
 ----- Uplink: internal below this line -----
 
@@ -128,7 +130,7 @@ index 5d4e142f7c530e7d47790dd1fe50afb32c292862..47cb938609f1cbcc29ef9f0dfb367b3b
 ```
 Update ttl function to return 7200 seconds
 
-Increase the TTL since it was too short
+Remove unused sha function
 
 Uplink-Patch-Id: upl_e935794740
 ```
