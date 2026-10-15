@@ -1,0 +1,27 @@
+From 1e47b3ae225aa1ca5423a8cd50aed476dad55aaa Mon Sep 17 00:00:00 2001
+From: Uplink Bot <uplink@company.example>
+Date: Thu, 15 Oct 2026 11:42:51 +0000
+Subject: [PATCH] Update ttl function to return 7200 seconds
+
+Increase the TTL since it was too short
+
+----- Uplink: internal below this line -----
+
+Uplink-Patch-Id: upl_e935794740
+---
+ src/tokens.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/tokens.js b/src/tokens.js
+index 0c7da2d506f5b1b38094895aeabfe9743b77877f..bb8c4b2fb06ac0d7f92f1e508ab5cd8f3f72b44a 100644
+--- a/src/tokens.js
++++ b/src/tokens.js
+@@ -13,5 +13,5 @@ export function hash(value) {
+ }
+ 
+ export function ttl() {
+-  return 3600;
++  return 7200;
+ }
+-- 
+2.55.0

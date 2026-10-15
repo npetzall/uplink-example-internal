@@ -95,6 +95,60 @@
     ],
     "kind": "uplink-tooling"
   },
-  "upstream": [],
+  "upstream": [
+    {
+      "id": "upl_e935794740",
+      "title": "Update ttl function to return 7200 seconds",
+      "commitMessage": "Update ttl function to return 7200 seconds\n\nIncrease the TTL since it was too short\n\n----- Uplink: internal below this line -----",
+      "status": "queued",
+      "dependsOn": [],
+      "createdAt": "2026-10-15T11:42:51.178Z",
+      "updatedAt": "2026-10-15T11:42:51.178Z",
+      "patchIdStable": "db98b943ac3c3f1cf03d403e8de839f685b02e89",
+      "source": {
+        "internalPrNumber": 15,
+        "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/15"
+      },
+      "assess": {
+        "at": "2026-10-15T11:42:51.195Z",
+        "ok": true,
+        "commitMessage": "Update ttl function to return 7200 seconds\n\nIncrease the TTL since it was too short\n\n----- Uplink: internal below this line -----",
+        "publicSubject": "Update ttl function to return 7200 seconds",
+        "publicBody": "Increase the TTL since it was too short",
+        "originalAuthor": "Nils Petzäll",
+        "originalEmail": "nils.petzall@gmail.com",
+        "cutoffFound": true,
+        "checks": [
+          {
+            "id": "message-scrubbed",
+            "status": "pass",
+            "detail": "No cutoff in the message. The whole message is treated as public."
+          },
+          {
+            "id": "cutoff-used",
+            "status": "skip",
+            "detail": "Optional. Add “----- Uplink: internal below this line -----” under the public body for issue ids and other internal notes."
+          },
+          {
+            "id": "co-author",
+            "status": "skip",
+            "detail": "No Uplink-Export-Author below the cutoff, so no Co-Authored-By trailer. The commit author is the contrib token's identity."
+          },
+          {
+            "id": "affiliation-leak",
+            "status": "pass",
+            "detail": "No configured company keywords or internal email domains in the export surface."
+          }
+        ]
+      },
+      "events": [
+        {
+          "at": "2026-10-15T11:42:51.178Z",
+          "type": "created",
+          "detail": "Internally approved via PR #15; imported as upstream"
+        }
+      ]
+    }
+  ],
   "internal": []
 }
