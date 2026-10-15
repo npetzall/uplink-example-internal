@@ -12,4 +12,4 @@
 #   credential, never in the job that writes.
 set -eu
 
-sfw npm ci && sfw npm test
+sfw npm test
