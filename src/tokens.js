@@ -13,5 +13,9 @@ export function hash(value) {
 }
 
 export function ttl() {
+<<<<<<< ours
   return 3000;
+=======
+  return 7200;
+>>>>>>> theirs
 }
