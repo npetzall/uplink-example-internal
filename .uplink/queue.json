@@ -99,22 +99,22 @@
     {
       "id": "upl_e935794740",
       "title": "Update ttl function to return 7200 seconds",
-      "commitMessage": "Update ttl function to return 7200 seconds\n\nIncrease the TTL since it was too short\n\n----- Uplink: internal below this line -----",
+      "commitMessage": "Update ttl function to return 7200 seconds\n\nRemove unused sha function\r\n\r\n----- Uplink: internal below this line -----",
       "status": "amended",
       "dependsOn": [],
       "createdAt": "2026-10-15T11:42:51.178Z",
-      "updatedAt": "2026-10-15T11:58:08.502Z",
+      "updatedAt": "2026-10-15T12:01:54.502Z",
       "patchIdStable": "635d5f3d30f2b3cdb8a6642f9031ab5fc5b62475",
       "source": {
         "internalPrNumber": 15,
         "internalPrUrl": "https://github.com/npetzall/uplink-example-internal/pull/15"
       },
       "assess": {
-        "at": "2026-10-15T11:57:54.476Z",
+        "at": "2026-10-15T12:01:54.429Z",
         "ok": true,
-        "commitMessage": "Update ttl function to return 7200 seconds\n\nIncrease the TTL since it was too short\n\n----- Uplink: internal below this line -----",
+        "commitMessage": "Update ttl function to return 7200 seconds\n\nRemove unused sha function\r\n\r\n----- Uplink: internal below this line -----",
         "publicSubject": "Update ttl function to return 7200 seconds",
-        "publicBody": "Increase the TTL since it was too short",
+        "publicBody": "Remove unused sha function",
         "originalAuthor": "Uplink Bot",
         "originalEmail": "uplink@company.example",
         "cutoffFound": true,
@@ -138,11 +138,6 @@
             "id": "affiliation-leak",
             "status": "pass",
             "detail": "No configured company keywords or internal email domains in the export surface."
-          },
-          {
-            "id": "dependencies",
-            "status": "skip",
-            "detail": "No Uplink-Depends-On."
           }
         ]
       },
@@ -198,6 +193,11 @@
           "at": "2026-10-15T11:58:08.502Z",
           "type": "assessed",
           "detail": "Assessed the patch for the contribution packet"
+        },
+        {
+          "at": "2026-10-15T12:01:54.502Z",
+          "type": "amended",
+          "detail": "Amended through the gated amend PR; patch refreshed and re-assessed"
         }
       ]
     }
