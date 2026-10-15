@@ -100,10 +100,10 @@
       "id": "upl_e935794740",
       "title": "Update ttl function to return 7200 seconds",
       "commitMessage": "Update ttl function to return 7200 seconds\n\nRemove unused sha function\r\n\r\n----- Uplink: internal below this line -----",
-      "status": "amended",
+      "status": "approved",
       "dependsOn": [],
       "createdAt": "2026-10-15T11:42:51.178Z",
-      "updatedAt": "2026-10-15T12:02:25.466Z",
+      "updatedAt": "2026-10-15T12:05:07.726Z",
       "patchIdStable": "635d5f3d30f2b3cdb8a6642f9031ab5fc5b62475",
       "source": {
         "internalPrNumber": 15,
@@ -161,6 +161,15 @@
           "patchIdStable": "db98b943ac3c3f1cf03d403e8de839f685b02e89",
           "runUrl": "https://github.com/npetzall/uplink-example-internal/actions/runs/38729484103",
           "reviewed": "251ca2846537df1f689acd1ab71fa27dfc8a0758"
+        },
+        {
+          "at": "2026-10-15T12:05:07.726Z",
+          "version": 2,
+          "kind": "delta",
+          "sha": "befbdecc820427dbe94d0e67ecca75da84f1052f",
+          "patchIdStable": "635d5f3d30f2b3cdb8a6642f9031ab5fc5b62475",
+          "runUrl": "https://github.com/npetzall/uplink-example-internal/actions/runs/38731604295",
+          "reviewed": "474f8b514f6a6db2ddc06168c0578b6bb9315dc0"
         }
       ],
       "events": [
@@ -208,6 +217,11 @@
           "at": "2026-10-15T12:02:25.466Z",
           "type": "assessed",
           "detail": "Assessed the patch for the contribution packet"
+        },
+        {
+          "at": "2026-10-15T12:05:07.726Z",
+          "type": "approved",
+          "detail": "IP approved the delta since the previous contribution approval"
         }
       ]
     }
