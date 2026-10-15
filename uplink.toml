@@ -1,0 +1,7 @@
+# Uplink settings. The CLI reads this file from branch uplink/hooks.
+
+# Words that must not appear in a contribution.
+redact_keywords = ["companyTelemetry", "AcmeCorp"]
+
+# Email domains flagged in the export.
+internal_email_domains = ["acme.example"]

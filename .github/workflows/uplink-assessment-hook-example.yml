@@ -1,0 +1,59 @@
+# Starter assessment hook. Callers only run
+# .github/workflows/uplink-assessment-hook.yml, so this file is ignored until
+# you copy it there. See assessment-hook.md on this branch.
+name: Uplink assessment hook
+run-name: Uplink assessment hook ${{ inputs.caller_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      caller_run_id:
+        description: Caller run id (it holds the assessment package, and matches this hook run)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  # To download the assessment package from the caller run.
+  actions: read
+
+jobs:
+  extra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # assessment.json, assessment.md and change.patch. From a pull request
+      # they describe a change that is not reviewed yet: read them as data.
+      - name: Download the assessment package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CALLER: ${{ inputs.caller_run_id }}
+        run: |
+          set -euo pipefail
+          # caller_run_id is <run id>-<attempt>.
+          gh run download "${CALLER%%-*}" --repo "$GITHUB_REPOSITORY" \
+            -n uplink-assessment -D "$RUNNER_TEMP/uplink-assessment"
+
+      - name: Write company extras
+        run: |
+          set -euo pipefail
+          package="$RUNNER_TEMP/uplink-assessment"
+          # "pr" for a pull request check, "patch" for Uplink submit.
+          kind=$(jq -r '.kind | select(. == "pr" or . == "patch")' "$package/assessment.json")
+          mkdir -p extras
+          cat > extras/10-company.md <<EOF
+          ## Company review notes
+
+          Extra details for this ${kind:-change}. Replace this step with Jira,
+          license, or classification output.
+          EOF
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: uplink-packet-extra
+          path: extras/*.md
+          if-no-files-found: error
