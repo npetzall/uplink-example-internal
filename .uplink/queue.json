@@ -7,12 +7,9 @@
     "internalBranch": "main",
     "upstreamUrl": "git@github.com:npetzall-contrib-a/uplink-example-upstream.git",
     "contribUrl": "git@github.com:npetzall-contrib-a/uplink-example-upstream-contrib.git",
-    "stateBranch": "uplink/state",
     "trailerKey": "Uplink-Patch-Id",
     "cutoffMarker": "----- Uplink: internal below this line -----",
-    "exportAuthorName": "Uplink Contributor",
-    "exportAuthorEmail": "uplink@users.noreply.github.com",
-    "forge": "example-github"
+    "forge": "try-it-on-github"
   },
   "lastSync": {
     "at": "2026-09-23T21:03:08.214Z",
@@ -27,19 +24,17 @@
     "status": "queued",
     "dependsOn": [],
     "createdAt": "2026-09-21T20:00:28.291Z",
-    "updatedAt": "2026-09-23T21:02:40.286Z",
-    "patchIdStable": "f72ee10b9d20e721a9d98d8df6de5ca0d74727dd",
+    "updatedAt": "2026-10-15T11:05:39.578Z",
+    "patchIdStable": "ae3e2510316e8ab7e0ffe0125fffa5a02ccb110f",
     "source": {
       "note": "forge example-github"
     },
     "assess": {
-      "at": "2026-09-23T21:02:40.286Z",
+      "at": "2026-10-15T11:05:39.578Z",
       "ok": true,
       "commitMessage": "Uplink tooling\n\nWorkflows and the GitHub pull request template for this repository.\n\n----- Uplink: internal below this line -----\n\ninternal-only; not submitted upstream.",
       "publicSubject": "Uplink tooling",
       "publicBody": "Workflows and the GitHub pull request template for this repository.",
-      "authorName": "Uplink Contributor",
-      "authorEmail": "uplink@users.noreply.github.com",
       "originalAuthor": "Uplink Bot",
       "originalEmail": "uplink@company.example",
       "cutoffFound": true,
@@ -55,9 +50,9 @@
           "detail": "Cutoff “----- Uplink: internal below this line -----” found."
         },
         {
-          "id": "author-rewrite",
-          "status": "pass",
-          "detail": "Export author Uplink Contributor <uplink@users.noreply.github.com> (was Uplink Bot <uplink@company.example>). Company main still records the Uplink bot."
+          "id": "co-author",
+          "status": "skip",
+          "detail": "No Uplink-Export-Author below the cutoff, so no Co-Authored-By trailer. The commit author is the contrib token's identity."
         },
         {
           "id": "affiliation-leak",
@@ -81,6 +76,11 @@
         "at": "2026-09-23T21:02:40.286Z",
         "type": "upgraded",
         "detail": "Refreshed example-github forge pack from embedded templates"
+      },
+      {
+        "at": "2026-10-15T11:05:39.578Z",
+        "type": "upgraded",
+        "detail": "Refreshed try-it-on-github forge pack from embedded templates"
       }
     ],
     "kind": "uplink-tooling"
