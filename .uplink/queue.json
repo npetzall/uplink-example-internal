@@ -25,6 +25,11 @@
       "c93796dab791ad0b6b358d62915594da98344dd1"
     ]
   },
+  "verifiedUpstream": {
+    "sha": "c93796dab791ad0b6b358d62915594da98344dd1",
+    "token": "ad621c438f367714399f2dc53830667e58013076",
+    "at": "2026-10-15T11:38:55.981Z"
+  },
   "tooling": {
     "id": "upl_00a3ebfdef",
     "title": "Uplink tooling",
