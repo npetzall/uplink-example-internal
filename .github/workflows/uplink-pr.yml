@@ -1,0 +1,309 @@
+# GitHub forge pack (`git uplink init --forge github`).
+#
+# Parallel required checks on every internal PR to company main except
+# uplink:internal-only. Assess rewrites the contribution as it would leave
+# the enterprise (PR title/body as the commit message, cutoff, export
+# author, keyword / internal-email scan) and posts the report. Preflight
+# applies the unique diff onto public upstream plus declared
+# Uplink-Depends-On, then tooling + queued upstream (internal omitted),
+# then preflight.sh from uplink/hooks. Fail these instead of opening a contribution
+# later that leaks company text or is missing queued work from main.
+#
+# Assess uploads its assessment package (result, public message, uplink.toml
+# settings and the diff) as artifact uplink-assessment, then runs the optional
+# company assessment hook from branch uplink/hooks, which reads that package
+# (see assessment-hook.md on that branch). Both results go into one PR comment
+# that is updated in place on every run. A failed hook is noted in the
+# comment; it does not fail the check.
+#
+# Both are advice for the author and the reviewers. Nothing from this run is
+# stored with the patch: the change has no patch id yet, and this workflow
+# file is the pull request's own copy. Uplink submit assesses the patch.
+#
+# Two more jobs are not checks. "Uplink rebase hint" comments how to rebase
+# when the main the branch was cut from has been replaced by a rebuild, and
+# removes the comment once the branch is rebased; with repository variable
+# UPLINK_AUTO_REBASE set to `true` it dispatches Uplink rebase instead of
+# waiting for the developer. "Uplink rebase request" runs when the label
+# uplink:rebase is added: it removes the label and dispatches Uplink rebase.
+# The checks run on that event like on any other label: a skipped check
+# counts as passed, so skipping them would let the label turn a failure
+# green.
+#
+# Put both check names in the required status checks for the PR.
+# This workflow does not write uplink/state (not uplink-mutate).
+# Origin fetch uses the Actions token as UPLINK_INTERNAL_TOKEN (contents: read).
+# preflight.sh runs in a step without that token. A separate job writes its
+# verdict to one PR comment, on every run and updated in place.
+name: Uplink PR checks
+
+on:
+  pull_request:
+    # labeled / unlabeled: both jobs are skipped for uplink:internal-only,
+    # and a skipped check counts as passed. Removing the label must run them.
+    # Every label change runs them: a job skipped for an unrelated label
+    # would replace an earlier failure with a pass.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    branches:
+      - main
+
+concurrency:
+  group: uplink-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  assess:
+    name: Uplink upstream assess
+    if: ${{ !contains(join(github.event.pull_request.labels.*.name, ','), 'uplink:internal-only') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          repo: ${{ vars.UPLINK_SRC }}
+          version: ${{ vars.UPLINK_VERSION }}
+          signer: ${{ vars.UPLINK_SIGNER }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assess contribution
+        id: assess
+        env:
+          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          FROM_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git uplink init
+          {
+            printf '%s\n\n' "$TITLE"
+            printf '%s\n' "${BODY:-}"
+          } > "$RUNNER_TEMP/uplink-msg.txt"
+          out="$RUNNER_TEMP/uplink-assessment"
+          code=0
+          git uplink assess \
+            --title "$TITLE" \
+            --message-file "$RUNNER_TEMP/uplink-msg.txt" \
+            --from "$FROM_SHA" \
+            --head "$HEAD_SHA" \
+            --package "$out" > /dev/null || code=$?
+          if [ ! -s "$out/assessment.md" ]; then
+            echo "git uplink assess wrote no assessment package"
+            exit 1
+          fi
+          cat "$out/assessment.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+
+      # For the hook only. Import does not read it.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: uplink-assessment
+          path: ${{ runner.temp }}/uplink-assessment/
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Run company assessment hook
+        id: hook
+        uses: $/.github/actions/uplink-assessment-hook
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update the assessment comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HOOK_DIR: ${{ steps.hook.outputs.dir }}
+        run: |
+          set -euo pipefail
+          marker='<!-- uplink:assessment -->'
+          {
+            echo "$marker"
+            extras=$(find "$HOOK_DIR" -maxdepth 1 -type f -name '*.md' | sort)
+            if [ -n "$extras" ]; then
+              while IFS= read -r file; do
+                cat "$file"
+                echo
+              done <<<"$extras"
+              echo "---"
+              echo
+            fi
+            cat "$RUNNER_TEMP/uplink-assessment/assessment.md"
+          } > "$RUNNER_TEMP/uplink-comment.md"
+          # One comment per PR, updated in place on every run.
+          id=$(gh api --paginate "repos/${GH_REPO}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"${marker}\"))) | .id" \
+            | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/${GH_REPO}/issues/comments/${id}" \
+              -F "body=@${RUNNER_TEMP}/uplink-comment.md" > /dev/null
+          else
+            gh api --method POST "repos/${GH_REPO}/issues/${PR_NUMBER}/comments" \
+              -F "body=@${RUNNER_TEMP}/uplink-comment.md" > /dev/null
+          fi
+
+      - name: Report assess result
+        env:
+          CODE: ${{ steps.assess.outputs.code }}
+        run: exit "$CODE"
+
+  # preflight.sh builds and runs product code (public upstream's included),
+  # so this job has a read-only token and no credentials in the checkout.
+  # The comment is posted by the job below, which never runs the script.
+  preflight:
+    name: Uplink upstream preflight
+    if: ${{ !contains(join(github.event.pull_request.labels.*.name, ','), 'uplink:internal-only') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      report: ${{ steps.run.outputs.report }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          repo: ${{ vars.UPLINK_SRC }}
+          version: ${{ vars.UPLINK_VERSION }}
+          signer: ${{ vars.UPLINK_SIGNER }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch what preflight reads
+        env:
+          UPLINK_INTERNAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FROM_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git uplink init
+          fetch_origin() {
+            local auth
+            auth=$(printf 'x-access-token:%s' "$UPLINK_INTERNAL_TOKEN" | base64 -w0)
+            git \
+              -c "http.${GITHUB_SERVER_URL}/.extraheader=" \
+              -c "http.${GITHUB_SERVER_URL}/.extraheader=Authorization: Basic ${auth}" \
+              fetch --quiet origin "$@"
+          }
+          fetch_origin "$FROM_SHA" "$HEAD_SHA"
+
+      - name: Run company toolchain hook
+        uses: $/.github/actions/uplink-toolchain-hook
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # No token in this step: git uplink refuses to run preflight.sh in a
+      # CI job step that holds one.
+      - name: Export preflight
+        id: run
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          FROM_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            printf '%s\n\n' "$TITLE"
+            printf '%s\n' "${BODY:-}"
+          } > "$RUNNER_TEMP/uplink-msg.txt"
+          report=$(git uplink preflight --json \
+            --title "$TITLE" \
+            --message-file "$RUNNER_TEMP/uplink-msg.txt" \
+            --from "$FROM_SHA" \
+            --head "$HEAD_SHA") || true
+          if ! jq -e . >/dev/null 2>&1 <<<"$report"; then
+            echo "git uplink printed no preflight result"
+            exit 1
+          fi
+          echo "report=$(jq -c . <<<"$report")" >> "$GITHUB_OUTPUT"
+
+      - name: Fail when preflight did not pass
+        env:
+          REPORT: ${{ steps.run.outputs.report }}
+        run: jq -e '.ok == true' <<<"$REPORT" > /dev/null
+
+  preflight-comment:
+    name: Uplink preflight comment
+    needs: preflight
+    if: ${{ always() && needs.preflight.result != 'skipped' && needs.preflight.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.ref }}
+          sparse-checkout: .github/actions
+
+      # Pass or fail, and when the job printed no result.
+      - uses: $/.github/actions/uplink-preflight-comment
+        with:
+          report: ${{ needs.preflight.outputs.report }}
+          pr-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Not a check. The branch is fetched and read, never checked out.
+  rebase-hint:
+    name: Uplink rebase hint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - uses: $/.github/actions/install-git-uplink
+        with:
+          repo: ${{ vars.UPLINK_SRC }}
+          version: ${{ vars.UPLINK_VERSION }}
+          signer: ${{ vars.UPLINK_SIGNER }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: $/.github/actions/uplink-rebase-comment
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+          auto-rebase: ${{ vars.UPLINK_AUTO_REBASE }}
+
+  # Not a check. The label is a request, so it is taken off before the
+  # rebase is dispatched: adding it again asks again.
+  rebase-request:
+    name: Uplink rebase request
+    if: ${{ github.event.action == 'labeled' && github.event.label.name == 'uplink:rebase' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Remove the label and dispatch Uplink rebase
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api --method DELETE "repos/${GH_REPO}/issues/${PR_NUMBER}/labels/uplink%3Arebase" > /dev/null
+          gh workflow run "Uplink rebase" --ref main -f "pr_number=${PR_NUMBER}"
