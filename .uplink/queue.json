@@ -17,14 +17,6 @@
     "result": "conflict",
     "message": "Patch upl_e935794740 (\"Update ttl function to return 7200 seconds\") does not apply onto the current upstream prefix."
   },
-  "pendingUpstream": {
-    "sha": "dda09849bf8488e990f9f747dc0dab3b2e6cb998",
-    "fromSha": "c93796dab791ad0b6b358d62915594da98344dd1",
-    "at": "2026-10-15T11:47:15.477Z",
-    "foreignCommits": [
-      "dda09849bf8488e990f9f747dc0dab3b2e6cb998"
-    ]
-  },
   "verifiedUpstream": {
     "sha": "dda09849bf8488e990f9f747dc0dab3b2e6cb998",
     "token": "fe434eceaf462c6befe7ad82f28d8da60d9112a7",
