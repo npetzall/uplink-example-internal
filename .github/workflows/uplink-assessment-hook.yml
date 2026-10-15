@@ -1,0 +1,48 @@
+# Placeholder for the company assessment hook. Do not edit it here.
+# GitHub only dispatches a workflow whose file exists on the default branch,
+# so this file lets Uplink run the real hook with --ref uplink/hooks.
+#
+# Run it by hand from main. It prints assessment-hook.md from the orphan
+# branch uplink/hooks, which git uplink init creates. It writes nothing.
+name: Uplink assessment hook
+
+on:
+  workflow_dispatch:
+    inputs:
+      caller_run_id:
+        description: Caller run id (it holds the assessment package, and matches this hook run)
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  guide:
+    name: Show the assessment hook guide
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Print assessment-hook.md from uplink/hooks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if ! guide=$(gh api -H "Accept: application/vnd.github.raw+json" \
+            "repos/${GH_REPO}/contents/assessment-hook.md?ref=uplink%2Fhooks" 2>&1); then
+            if grep -q "HTTP 404" <<<"$guide"; then
+              {
+                echo "> [!WARNING]"
+                echo "> \`uplink/hooks\` or its \`assessment-hook.md\` is missing on origin."
+                echo "> Run \`git uplink init --upgrade\`, then \`git uplink push\`."
+                echo "> \`git uplink doctor\` checks the branch (refs/heads/uplink/hooks)."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error title=uplink/hooks missing::Run git uplink init --upgrade, then git uplink push."
+              exit 1
+            fi
+            echo "::error title=Could not read uplink/hooks::${guide}"
+            exit 1
+          fi
+          printf '%s\n' "$guide" >> "$GITHUB_STEP_SUMMARY"
