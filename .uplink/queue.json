@@ -100,10 +100,10 @@
       "id": "upl_e935794740",
       "title": "Update ttl function to return 7200 seconds",
       "commitMessage": "Update ttl function to return 7200 seconds\n\nRemove unused sha function\r\n\r\n----- Uplink: internal below this line -----",
-      "status": "approved",
+      "status": "submitted",
       "dependsOn": [],
       "createdAt": "2026-10-15T11:42:51.178Z",
-      "updatedAt": "2026-10-15T12:05:07.726Z",
+      "updatedAt": "2026-10-15T12:05:10.290Z",
       "patchIdStable": "635d5f3d30f2b3cdb8a6642f9031ab5fc5b62475",
       "source": {
         "internalPrNumber": 15,
@@ -150,7 +150,7 @@
         "contribBranch": "uplink/upl_e935794740",
         "prNumber": 7,
         "prUrl": "https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/7",
-        "submittedAt": "2026-10-15T11:45:50.581Z"
+        "submittedAt": "2026-10-15T12:05:10.290Z"
       },
       "approvals": [
         {
@@ -222,6 +222,11 @@
           "at": "2026-10-15T12:05:07.726Z",
           "type": "approved",
           "detail": "IP approved the delta since the previous contribution approval"
+        },
+        {
+          "at": "2026-10-15T12:05:10.290Z",
+          "type": "submitted",
+          "detail": "Upstream PR https://github.com/npetzall-contrib-a/uplink-example-upstream/pull/7"
         }
       ]
     }
