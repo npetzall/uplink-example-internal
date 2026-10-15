@@ -12,10 +12,10 @@
     "forge": "try-it-on-github"
   },
   "lastSync": {
-    "at": "2026-10-15T11:48:19.199Z",
+    "at": "2026-10-15T11:57:40.869Z",
     "upstreamSha": "dda09849bf8488e990f9f747dc0dab3b2e6cb998",
-    "result": "conflict",
-    "message": "Patch upl_e935794740 (\"Update ttl function to return 7200 seconds\") does not apply onto the current upstream prefix."
+    "result": "ok",
+    "message": "Rebuild completed"
   },
   "verifiedUpstream": {
     "sha": "dda09849bf8488e990f9f747dc0dab3b2e6cb998",
