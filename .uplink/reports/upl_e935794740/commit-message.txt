@@ -1,0 +1,5 @@
+Update ttl function to return 7200 seconds
+
+Increase the TTL since it was too short
+
+Uplink-Patch-Id: upl_e935794740
